@@ -9,3 +9,5 @@
 #define blob_port(x) (x == 0 ? NODE0_BLOB_PORT : NODE1_BLOB_PORT)
 #define pb_port(x) (x == 0 ? NODE0_PB_PORT : NODE1_PB_PORT)
 
+#define BLOB_SERVER_WORKER 5
+#define PB_SERVER_WORKER 5

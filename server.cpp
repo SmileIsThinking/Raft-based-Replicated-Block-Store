@@ -1,11 +1,11 @@
 #include "server.h"
 #include "server_store.h"
+#include <iostream>
+#include <unistd.h>
+#include <string>
+#include <random>
 
 #include "util.h"
-
-thread_local std::string local_backup_hostname;
-thread_local int local_backup_port;
-thread_local std::shared_ptr<pb_rpcIf> other;
 
 void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
   // Read from a backup
@@ -15,8 +15,8 @@ void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
     return;
   }
 
-  // TODO: check for return values
-  if (ServerStore::read(addr, _return.value) >= 0) {
+  // TODO: check for return values  
+  if (ServerStore::read(addr, _return.value) == 0) {
     _return.rc = Errno::SUCCESS;
     return;
   }
@@ -43,28 +43,18 @@ retry:
     goto retry;
   }
 
-  std::vector<int64_t> seq;
+  int64_t seq;
   int result = ServerStore::write(addr, value, seq);
 
   // done with writing
   num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
 
-  if (result < 0)
+  if (result != 0)
     return Errno::UNEXPECTED;
   if (!has_backup.load())
     return Errno::SUCCESS;
-  // TODO: check for return values
+  // TODO: check for return values  
   try {
-    if (local_backup_hostname != backup_hostname || local_backup_port != backup_port) {
-      local_backup_hostname = backup_hostname;
-      local_backup_port = backup_port;
-      std::shared_ptr<TTransport> socket(new TSocket(local_backup_hostname, local_backup_port));
-      std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-      std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-      other = std::make_shared<pb_rpcClient>(protocol);
-      transport->open();
-      other->ping();
-    }
     PB_Errno::type reply = other->update(addr, value, seq);
     if (reply == PB_Errno::SUCCESS)
       return Errno::SUCCESS;
@@ -78,17 +68,21 @@ retry:
   }
 }
 
-PB_Errno::type pb_rpcHandler::update(const int64_t addr, const std::string& value, const std::vector<int64_t>& seq) {
+PB_Errno::type pb_rpcHandler::update(const int64_t addr, const std::string& value, const int64_t seq) {
+  static std::atomic<int64_t> curr_seq(0);
+
   if (is_primary.load()) {
     std::cerr << "update: Not a Primary" << std::endl;
     return PB_Errno::NOT_BACKUP;
   }
   // Wait for previous updates to complete
-  ServerStore::wait_prev(addr, seq);
-  std::vector<int64_t> tmp;
+  while (curr_seq.load() != seq);
+  int64_t tmp;
   int result = ServerStore::write(addr, value, tmp);
+  // let subsequent requests run
+  curr_seq.fetch_add(1, std::memory_order_acq_rel);
   // TODO: handle write failures
-  if (result >= 0)
+  if (result == 0)
     return PB_Errno::SUCCESS;
   else
     // Backup fail to make copy, crash to avoid inconsistency
@@ -104,7 +98,7 @@ void pb_rpcHandler::heartbeat() {
   time(&last_heartbeat);
 }
 
-void send_heartbeat(std::shared_ptr<pb_rpcIf> other) {
+void send_heartbeat() {
   try {
     while (true) {
       sleep(HB_FREQ);
@@ -141,12 +135,11 @@ void pb_rpcHandler::new_backup(new_backup_ret& _return, const std::string& hostn
     return;
   }
 
-  backup_hostname = hostname;
-  backup_port = port;
   std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  auto other = std::make_shared<pb_rpcClient>(protocol);
+  otherSyncInfo = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+  other = std::make_shared<pb_rpcConcurrentClient>(protocol, otherSyncInfo);
   transport->open();
   other->ping();
 
@@ -155,9 +148,9 @@ void pb_rpcHandler::new_backup(new_backup_ret& _return, const std::string& hostn
   // block wait for current write operations to complete
   while (num_write_requests.load() != 0);
   // full file read
-  ServerStore::full_read(_return.content, _return.seq);
+  ServerStore::full_read(_return.content);
 
-  std::thread(send_heartbeat, other).detach();
+  std::thread(send_heartbeat).detach();
   std::thread(new_backup_helper).detach();
   _return.rc = PB_Errno::SUCCESS;
   return;
@@ -209,7 +202,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
   std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  auto other = std::make_shared<pb_rpcClient>(protocol);
+  other = std::make_shared<pb_rpcClient>(protocol);
   transport->open();
 
   other->ping();
@@ -218,7 +211,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
   other->new_backup(ret, my_addr, my_pb_port);
   if (ret.rc != PB_Errno::SUCCESS)
     exit(0);
-  if (ServerStore::full_write(ret.content, ret.seq) < 0) {
+  if (ServerStore::full_write(ret.content) != 0) {
     std::cout << "fail to write to backup" << std::endl;
     exit(1);
   }
@@ -251,8 +244,6 @@ int main(int argc, char** argv) {
 
   // If backup, attempt to connect to primary. We assume node 0 is primary
   if (!is_primary.load()) {
-    // wait for PB server to start
-    sleep(1);
     int primary_id = std::stoi(argv[2]);
     connect_to_primary(addr(primary_id), pb_port(primary_id));
   }

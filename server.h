@@ -1,7 +1,4 @@
-#define HB_FREQ 2
-
-#define BLOB_SERVER_WORKER 5
-#define PB_SERVER_WORKER (BLOB_SERVER_WORKER + 1)
+#define HB_FREQ 5
 
 #include "gen-cpp/blob_rpc.h"
 #include "gen-cpp/pb_rpc.h"
@@ -39,8 +36,8 @@ time_t last_heartbeat;
 std::atomic<int> num_write_requests;
 std::atomic<bool> pending_backup;
 std::atomic<bool> has_backup;
-std::string backup_hostname;
-int backup_port;
+::std::shared_ptr<pb_rpcIf> other = nullptr;
+::std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> otherSyncInfo = nullptr;
 
 class blob_rpcHandler : virtual public blob_rpcIf {
 public:
@@ -68,6 +65,6 @@ public:
 
     void new_backup(new_backup_ret& ret, const std::string& hostname, const int32_t port);
     void new_backup_succeed();
-    PB_Errno::type update(const int64_t addr, const std::string& value, const std::vector<int64_t>& seq);
+    PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
     void heartbeat();
 };
