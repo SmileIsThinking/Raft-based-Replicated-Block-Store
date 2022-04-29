@@ -35,3 +35,44 @@ service pb_rpc {
     PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
     oneway void heartbeat(),
 }
+
+/* ===================================== */
+/* Raft RPC  */
+/* ===================================== */
+
+struct request_vote_args {
+    1: i32 term,
+    2: i32 candidateId,
+    3: i32 lastLogIndex,
+    4: i32 lastLogTerm,
+}
+
+struct request_vote_reply {
+    1: i32 term,
+    2: bool voteGranted,
+}
+
+
+struct entry {
+    1: i32 commmand,
+    2: i32 term,   
+}
+
+struct append_entries_args {
+    1: i32 term,
+    2: i32 leaderId,
+    3: i32 prevLogIndex,
+    4: i32 prevLogTerm,
+    5: list<entry> entries,
+    6: i32 leaderCommit,
+}
+
+struct append_entries_reply {
+    1: i32 term,
+    2: bool success,
+}
+
+service raft_rpc {
+    request_vote_reply request_vote(1:request_vote_args requestVote),
+    append_entries_reply append_entries(1:append_entries_args appendEntry),
+}
