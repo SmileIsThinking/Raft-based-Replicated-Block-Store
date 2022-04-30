@@ -2,7 +2,7 @@ CC := g++
 CFLAGS := -Wall -g -std=c++11
 LIB := -lthrift -pthread
 
-DEP := gen-cpp/blob_rpc.cpp gen-cpp/pb_rpc.cpp gen-cpp/rpc_types.cpp
+DEP := gen-cpp/blob_rpc.cpp gen-cpp/pb_rpc.cpp gen-cpp/raft_rpc.cpp gen-cpp/rpc_types.cpp
 
 all: server client
 

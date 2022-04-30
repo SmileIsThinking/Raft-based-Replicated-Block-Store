@@ -2,6 +2,7 @@
 
 #include "gen-cpp/blob_rpc.h"
 #include "gen-cpp/pb_rpc.h"
+#include "gen-cpp/raft_rpc.h"
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
@@ -19,6 +20,7 @@
 
 #include "include.h"
 #include "server_store.h"
+#include <vector>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -67,4 +69,46 @@ public:
     void new_backup_succeed();
     PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
     void heartbeat();
+};
+
+/* ===================================== */
+/* Raft States  */
+/* ===================================== */
+
+
+/* Persistent State */
+
+
+typedef struct logEntry_ {
+    int commmand;
+    int term;
+}logEntry;
+
+
+struct persistStates {
+    int currentTerm;   // init as 0
+    int votedFor;
+    int entryNum;
+    std::vector<logEntry> raftLog;
+};
+
+/* Volatile State on all servers */
+int commitIndex; // init from 0
+int lastApplied; 
+
+
+/* Volatile State on leaders */
+/* reinitialized after election */
+int nextIndex[NODE_NUM];
+int matchIndex[NODE_NUM];
+
+
+class raft_rpcHandler : virtual public raft_rpcIf {
+public:
+    raft_rpcHandler() {
+        std::cout << "Raft Node Started" << std::endl;
+    }
+
+    void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
+    void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };

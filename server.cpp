@@ -218,6 +218,43 @@ void connect_to_primary(const std::string& hostname, const int port) {
   other->new_backup_succeed();
 }
 
+
+/* ===================================== */
+/* Raft Implementation  */
+/* ===================================== */
+
+void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
+  std::cout << "request vote starts" << std::endl;
+  return;
+}
+
+void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
+  std::cout << "append entries starts" << std::endl;
+  return;
+}
+
+void start_raft_server(int id) {
+  if(id < 0 || id > 2) {
+    std::cout << "unknown id" << std::endl;
+    return;
+  }
+  std::cout << "Starting Raft Server at " << raftPort[id] << std::endl;
+  ::std::shared_ptr<raft_rpcHandler> handler(new raft_rpcHandler());
+  ::std::shared_ptr<TProcessor> processor(new raft_rpcProcessor(handler));
+  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(raftPort[id]));
+  ::std::shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
+  ::std::shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
+  std::shared_ptr<ThreadFactory> threadFactory = std::shared_ptr<ThreadFactory>(new ThreadFactory());
+  std::shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(RAFT_SERVER_WORKER);
+
+  TThreadPoolServer raft_server(processor, serverTransport, transportFactory, protocolFactory, threadManager);
+
+  threadManager->threadFactory(threadFactory);
+  threadManager->start();
+  raft_server.serve();
+}
+
+
 int main(int argc, char** argv) {
   // TODO: change the logic for which is primary
   if (argc != 2 && argc != 3) {
