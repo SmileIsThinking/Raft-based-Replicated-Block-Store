@@ -222,9 +222,39 @@ void connect_to_primary(const std::string& hostname, const int port) {
 /* ===================================== */
 /* Raft Implementation  */
 /* ===================================== */
+void raft_rpc_init() {
+  for(int i = 0; i < NODE_NUM; i++) {
+    std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[i], raftPort[i]));
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+    syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+    rpcServer[i] = std::make_shared<pb_rpcConcurrentClient>(protocol, syncInfo[i]);
+    transport->open();
+    rpcServer[i]->ping();    
+  }
+  return;
+}
+
+void send_request_vote(int ID, const request_vote_args& requestVote) {
+  
+  return;
+}
 
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
   std::cout << "request vote starts" << std::endl;
+
+  if(role.load() != 1) {
+    std::cerr << "Not a Candidate !!" << std::endl;
+    return;
+  }
+
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
+    std::thread(send_request_vote, i, requestVote).detach();
+  }
+
   return;
 }
 
@@ -261,6 +291,12 @@ int main(int argc, char** argv) {
     std::cout << "Usage: ./server <my_node_id> [primary_node_id]" << std::endl;
     return 1;
   }
+
+  /* raft init */
+  myID = std::atoi(argv[1]);
+  raft_rpc_init();
+
+
 
   is_primary.store(argc == 2);
   printf("%s\n", is_primary ? "Primary" : "Backup");
