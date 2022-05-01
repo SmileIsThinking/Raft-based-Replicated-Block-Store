@@ -72,10 +72,23 @@ public:
 };
 
 /* ===================================== */
+/* Raft Misc Variables */
+/* ===================================== */
+std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr, nullptr, nullptr};
+std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> \
+syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
+
+int myID;
+
+// 0: Leader
+// 1: Candidate
+// 2: Follower
+std::atomic<int> role;
+
+
+/* ===================================== */
 /* Raft States  */
 /* ===================================== */
-
-
 /* Persistent State */
 
 
@@ -84,13 +97,14 @@ typedef struct logEntry_ {
     int term;
 }logEntry;
 
-
-struct persistStates {
-    int currentTerm;   // init as 0
-    int votedFor;
+typedef struct persistStates_ {
+    std::atomic<int> currentTerm;   // init to 0
+    int votedFor;  // init to -1
     int entryNum;
     std::vector<logEntry> raftLog;
-};
+}persistStates;
+
+persistStates pStates;
 
 /* Volatile State on all servers */
 int commitIndex; // init from 0
@@ -107,6 +121,10 @@ class raft_rpcHandler : virtual public raft_rpcIf {
 public:
     raft_rpcHandler() {
         std::cout << "Raft Node Started" << std::endl;
+    }
+
+    void ping() {
+        printf("%n: raft ping n", &myID);
     }
 
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
