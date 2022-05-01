@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="0a1ca1e6-6dbb-40fe-a507-da85b416e349" name="node0">
+        <fileTransfer rootFolder="/users/ZK" accessType="SFTP" host="c220g1-030612.wisc.cloudlab.us" port="22" sshConfigId="775d1470-d495-4b6e-bbb5-206f34a87788" sshConfig="node0" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="f6a9c6e6-c68b-423e-a8e1-a979a7f61db3" name="node1">
+        <fileTransfer rootFolder="/users/ZK" accessType="SFTP" host="c220g1-030611.wisc.cloudlab.us" port="22" sshConfigId="6ac6fca3-e20f-4fc2-b722-2cf765cc88bb" sshConfig="node1" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="83a0135a-e649-4330-85c2-9d9ecf052c20" name="node2">
+        <fileTransfer rootFolder="/users/ZK" accessType="SFTP" host="c220g1-030617.wisc.cloudlab.us" port="22" sshConfigId="21f90ad1-3d3f-4d71-8707-3c53797dee62" sshConfig="node2" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+    <groups>
+      <group>
+        <name>P4 Raft</name>
+        <servers>
+          <name value="node0" />
+          <name value="node1" />
+          <name value="node2" />
+        </servers>
+      </group>
+    </groups>
+  </component>
+</project>
