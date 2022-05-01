@@ -74,7 +74,7 @@ public:
 /* ===================================== */
 /* Raft Misc Variables */
 /* ===================================== */
-std::shared_ptr<pb_rpcIf> rpcServer[NODE_NUM] = {nullptr, nullptr, nullptr};
+std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr, nullptr, nullptr};
 std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> \
 syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
 
@@ -97,13 +97,14 @@ typedef struct logEntry_ {
     int term;
 }logEntry;
 
-
-struct persistStates {
-    int currentTerm;   // init as 0
-    int votedFor;
+typedef struct persistStates_ {
+    std::atomic<int> currentTerm;   // init to 0
+    int votedFor;  // init to -1
     int entryNum;
     std::vector<logEntry> raftLog;
-};
+}persistStates;
+
+persistStates pStates;
 
 /* Volatile State on all servers */
 int commitIndex; // init from 0

@@ -228,35 +228,72 @@ void raft_rpc_init() {
     std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
     syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
-    rpcServer[i] = std::make_shared<pb_rpcConcurrentClient>(protocol, syncInfo[i]);
+    rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
     transport->open();
     rpcServer[i]->ping();    
   }
   return;
 }
 
-void send_request_vote(int ID, const request_vote_args& requestVote) {
+void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
+  std::cout << "get vote request" << std::endl;
+
+  if(requestVote.term < pStates.currentTerm.load()) {
+    ret.voteGranted = false;
+    ret.term = pStates.currentTerm.load();
+    return;
+  }
   
+  // TODO: check in detail
+  if(pStates.votedFor == -1 || pStates.votedFor == requestVote.candidateId) {
+    if(lastApplied <= requestVote.lastLogIndex) {
+      ret.voteGranted = true;
+      return;
+    }
+  }
+
+  ret.term = pStates.currentTerm.load();
+  ret.voteGranted = false;
   return;
 }
 
-void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
-  std::cout << "request vote starts" << std::endl;
+// void send_request_vote(int ID, const request_vote_args& requestVote) {
 
+// }
+
+void send_request_votes(const request_vote_args& requestVote) {
   if(role.load() != 1) {
     std::cerr << "Not a Candidate !!" << std::endl;
     return;
   }
 
+  (pStates.currentTerm)++;
+  request_vote_reply ret[NODE_NUM];
+
+  // TODO: multi-thread requests
+  // std::thread* threadPool[NODE_NUM] = {nullptr};
   for(int i = 0; i < NODE_NUM; i++) {
     if(i == myID) {
+      ret[i].voteGranted = true;
       continue;
     }
-    std::thread(send_request_vote, i, requestVote).detach();
+    std::cout << "send vote request to " << i << std::endl;
+    rpcServer[i]->request_vote(ret[i], requestVote);
   }
 
+  int count = 0;
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(ret[i].voteGranted == true){
+      count++;
+    }
+  }
+  if(count >= MAJORITY) {
+    role.store(0);
+  }
   return;
 }
+
+
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
