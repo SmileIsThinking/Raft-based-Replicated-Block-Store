@@ -98,9 +98,9 @@ typedef struct logEntry_ {
 }logEntry;
 
 typedef struct persistStates_ {
-    std::atomic<int> currentTerm;   // init to 0
-    int votedFor;  // init to -1
-    int entryNum;
+    std::atomic<int> currentTerm{0};   // init to 0
+    int votedFor = -1;  // init to -1
+    int entryNum = 0;
     std::vector<logEntry> raftLog;
 }persistStates;
 

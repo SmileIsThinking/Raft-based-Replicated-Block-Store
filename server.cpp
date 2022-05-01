@@ -230,7 +230,7 @@ void raft_rpc_init() {
     syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
     rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
     transport->open();
-    rpcServer[i]->ping();    
+//    rpcServer[i]->ping();
   }
   return;
 }
@@ -297,6 +297,22 @@ void send_request_votes(const request_vote_args& requestVote) {
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
+  if(pStates.entryNum > 0){
+      printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, pStates.votedFor);
+  }
+  //todo: update timer for local node
+  if(appendEntries.term < pStates.currentTerm){
+      ret.success = false;
+  } else{
+      // success
+      //todo:set current as follower, if curr node is proposing to be the leader
+      pStates.currentTerm = appendEntries.term;
+      pStates.votedFor = appendEntries.leaderId;
+      pStates.raftLog; //todo: append/replace entries beginning the index
+      pStates.entryNum = appendEntries.leaderCommit; //todo: correct?
+      ret.success = true;
+  }
+  ret.term = pStates.currentTerm;
   return;
 }
 
