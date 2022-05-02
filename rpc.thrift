@@ -54,7 +54,7 @@ struct request_vote_reply {
 
 
 struct entry {
-    1: i32 commmand,
+    1: i32 command,
     2: i32 term,   
 }
 

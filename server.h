@@ -101,7 +101,7 @@ typedef struct persistStates_ {
     std::atomic<int> currentTerm{0};   // init to 0
     int votedFor = -1;  // init to -1
     int entryNum = 0;
-    std::vector<logEntry> raftLog;
+    std::vector<entry> raftLog;
 }persistStates;
 
 persistStates pStates;

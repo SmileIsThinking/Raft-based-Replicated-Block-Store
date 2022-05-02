@@ -283,8 +283,8 @@ void send_request_votes(const request_vote_args& requestVote) {
   }
 
   int count = 0;
-  for(int i = 0; i < NODE_NUM; i++) {
-    if(ret[i].voteGranted == true){
+  for(auto & i : ret) {
+    if(i.voteGranted){
       count++;
     }
   }
@@ -305,7 +305,7 @@ bool check_prev_entries(int prev_term, int prev_index){
     return false;
 }
 
-void append_logs(const std::vector<logEntry>& logs, int idx){
+void append_logs(const std::vector<entry>& logs, int idx){
     if (pStates.raftLog.size() > idx){ //todo: check index
         pStates.raftLog.erase(pStates.raftLog.begin() + idx, pStates.raftLog.end());
     }
