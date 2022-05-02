@@ -1,12 +1,18 @@
 enum Errno {
     SUCCESS = 0,
-    BACKUP = 1,
+    NOT_LEADER = 1,
     UNEXPECTED = 99,
 }
 
 struct read_ret {
     1: Errno rc,
     2: string value,
+    3：i32 node_id,
+}
+
+struct write_ret {
+    1: Errno rc,
+    2：i32 node_id,
 }
 
 service blob_rpc {
@@ -55,7 +61,8 @@ struct request_vote_reply {
 
 struct entry {
     1: i32 commmand,
-    2: i32 term,   
+    2: i32 term,
+    3: string content,   
 }
 
 struct append_entries_args {

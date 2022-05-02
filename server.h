@@ -32,11 +32,11 @@ std::string my_addr;
 int my_blob_port;
 int my_pb_port;
 
-std::atomic<bool> is_primary;
+std::atomic<bool> is_leader;
 time_t last_heartbeat;
 // assuming single backup
 std::atomic<int> num_write_requests;
-std::atomic<bool> pending_backup;
+std::atomic<bool> pending_candidate;
 std::atomic<bool> has_backup;
 ::std::shared_ptr<pb_rpcIf> other = nullptr;
 ::std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> otherSyncInfo = nullptr;
@@ -79,6 +79,8 @@ std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> \
 syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
 
 int myID;
+
+int leaderID = NULL;
 
 // 0: Leader
 // 1: Candidate

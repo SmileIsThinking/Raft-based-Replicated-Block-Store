@@ -11,7 +11,7 @@ using namespace apache::thrift::transport;
 
 // which server we are currently talking to
 
-int server = 0;
+int server;
 std::shared_ptr<blob_rpcClient> client;
 
 void BlockStore::conn_init(const std::string& hostname, const int port) {
@@ -32,19 +32,20 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
     while(try_time < retry_time){
         try_time++;
         try{
-            conn_init(addr(server), blob_port(server));
+            server = rand() % NODE_NUM;
+            conn_init(nodeAddr(server), raftPort(server));
             client->read(ret_res, address);
 
             if(ret_res.rc == Errno::SUCCESS) {
                 value = ret_res.value;
                 return Errno::SUCCESS;
-            } else if(ret_res.rc == Errno::BACKUP){
-                server = 1 - server;
-                std::cout<<"reconnect to node "<<server<<std::endl;
+            } else if(ret_res.rc == Errno::NOT_LEADER){
+                server = ret_res.node_id;
+                std::cout<<"reconnect to leader "<<server<<std::endl;
             }
         } catch (TException &tx){
-            // dosth
-            server = 1 - server;
+            // TODO: wait for another leader 
+            
             sleep(sleep_time);
         }
     }
@@ -55,23 +56,26 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ret
     Errno::type error;
     std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
+    write_ret ret_res;
     while(tries > 0){
         tries--;
         try{
-            conn_init(addr(server), blob_port(server));
-            error = client->write(address, write);
+            server = rand() % NODE_NUM;
+            conn_init(nodeAddr(server), raftPort(server));
+            error = client->write(ret_res, address, write);
             std::cout<<error<<std::endl;;
 
-            if(error == Errno::BACKUP){
+            if(error == Errno::NOT_LEADER){
                 // reconnect to backup, change host
-                server = 1 - server;
+                server = ret_res.node_id;
                 std::cout<<"reconnect to node "<<server<<std::endl;
             } else if(error == Errno::SUCCESS){
                 return error;
             }
         } catch (TException &tx){
             // dosth
-            server = 1 - server;
+            // server = 1 - server;
+            // TODO: wait for another leader 
             sleep(sleep_time);
         }
     }
