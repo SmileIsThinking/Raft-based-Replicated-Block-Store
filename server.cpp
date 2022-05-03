@@ -235,6 +235,44 @@ void raft_rpc_init() {
   return;
 }
 
+
+
+// TODO: follower timeout
+void toFollower(int term) {
+  pthread_rwlock_wrlock(&rolelock);
+
+  role.store(2);
+  int vote = -1;
+
+  ServerStore::write_state(term, vote);
+  currentTerm.store(term);
+  votedFor.store(vote); 
+
+  pthread_rwlock_unlock(&rolelock);
+}
+
+void toCandidate() {
+  pthread_rwlock_wrlock(&rolelock);
+
+  role.store(1);
+  int term = currentTerm.load() + 1;
+  int vote = myID;
+
+  ServerStore::write_state(term, vote);
+  currentTerm.store(term);
+  votedFor.store(vote);
+
+  pthread_rwlock_unlock(&rolelock);
+}
+
+void toLeader() {
+  pthread_rwlock_wrlock(&rolelock);
+  role.store(0);
+
+
+  pthread_rwlock_unlock(&rolelock);
+}
+
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
   std::cout << "get vote request" << std::endl;
 
@@ -243,33 +281,39 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     ret.term = currentTerm.load();
     return;
   }
+
+  if(requestVote.term > currentTerm.load()) {
+    toFollower(requestVote.term);
+  }
   
-
-  if(((requestVote.term > currentTerm.load()) || (requestVote.term == currentTerm.load() && (requestVote.candidateId == votedFor || votedFor != -1))) && 
-    ((requestVote.lastLogTerm > currentTerm.load()) || (requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex > raftLog.size()) )){
+  int vote = votedFor.load();
+  if(vote == -1 || vote == requestVote.candidateId) {
+    if(requestVote.lastLogTerm > currentTerm.load()) {
       ret.voteGranted = true;
-      ret.term = requestVote.term;
-      votedFor = requestVote.candidateId;
-      // TODO: set the current server as follower
+      votedFor.store(requestVote.candidateId);  
+      return;
+    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= raftLog.size()) {
+      ret.voteGranted = true;
+      votedFor.store(requestVote.candidateId);   
+      return;  
+    } 
+  }
 
-
-    }
-
+  ret.voteGranted = false;
+  ret.term = currentTerm.load();
+  return;    
  
 }
 
-// void send_request_vote(int ID, const request_vote_args& requestVote) {
-
-// }
-
+// TODO: election timeout randomly in [T, 2T] (T >> RTT)
 void send_request_votes(const request_vote_args& requestVote) {
   if(role.load() != 1) {
     std::cerr << "Not a Candidate !!" << std::endl;
     return;
   }
 
-//  (currentTerm)++;
-  currentTerm.store(currentTerm.load() + 1);
+  // currentTerm.store(currentTerm.load() + 1);
+  // votedFor.store(-1);
   request_vote_reply ret[NODE_NUM];
 
   // TODO: multi-thread requests
@@ -315,6 +359,11 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
+
+  if(appendEntries.term > currentTerm.load()) {
+    toFollower(appendEntries.term);
+  }
+
   if(entryNum > 0){
       printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   }
@@ -388,6 +437,10 @@ void start_raft_server(int id) {
   raft_server.serve();
 }
 
+
+void server_init() {
+  pthread_rwlock_init(&rolelock, NULL);
+}
 
 int main(int argc, char** argv) {
   // TODO: change the logic for which is primary
