@@ -54,8 +54,11 @@ struct request_vote_reply {
 
 
 struct entry {
+    // 0: read, 1: write
     1: i32 command,
     2: i32 term,   
+    3: i64 address,
+    4: string content,
 }
 
 struct append_entries_args {
@@ -73,6 +76,7 @@ struct append_entries_reply {
 }
 
 service raft_rpc {
+    void ping(),
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
 }

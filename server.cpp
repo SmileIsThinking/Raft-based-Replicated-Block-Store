@@ -244,17 +244,18 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     return;
   }
   
-  // TODO: check in detail
-  if(pStates.votedFor == -1 || pStates.votedFor == requestVote.candidateId) {
-    if(lastApplied <= requestVote.lastLogIndex) {
-      ret.voteGranted = true;
-      return;
-    }
-  }
 
-  ret.term = pStates.currentTerm.load();
-  ret.voteGranted = false;
-  return;
+  if(((requestVote.term > pStates.currentTerm.load()) || (requestVote.term == pStates.currentTerm.load() && (requestVote.candidateId == pStates.votedFor || pStates.votedFor != -1))) && 
+    ((requestVote.lastLogTerm > pStates.currentTerm.load()) || (requestVote.lastLogTerm == pStates.currentTerm.load() && requestVote.lastLogIndex > pStates.raftLog.size()) )){
+      ret.voteGranted = true;
+      ret.term = requestVote.term;
+      pStates.votedFor = requestVote.candidateId;
+      // TODO: set the current server as follower
+
+
+    }
+
+ 
 }
 
 // void send_request_vote(int ID, const request_vote_args& requestVote) {
