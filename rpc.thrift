@@ -23,8 +23,8 @@ service blob_rpc {
 
 enum PB_Errno {
     SUCCESS = 0,
-    NOT_BACKUP = 1,
-    NOT_PRIMARY = 2,
+    IS_LEADER = 1,
+    NOT_LEADER = 2,
     BACKUP_EXISTS = 3,
     UNEXPECTED = 99,
 }
