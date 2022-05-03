@@ -20,6 +20,9 @@ pthread_rwlock_t rwlock;
 pthread_rwlock_t loglock;
 pthread_rwlock_t statelock;
 
+std::ifstream logIn;
+std::ofstream logOut;
+    
 int ServerStore::init(int node_id) {
     pthread_rwlock_init(&rwlock, NULL);
     mode_t mode = S_IRUSR | S_IWUSR;
@@ -39,6 +42,11 @@ int ServerStore::init(int node_id) {
     if (log_fd == -1) {
         return -1;
     }
+
+    logIn.open(filename, std::ios::binary);
+    logOut.open(filename, std::ios::app | std::ios::binary);
+
+
 
     pthread_rwlock_init(&statelock, NULL);
     filename = STATE + std::to_string(node_id);
@@ -137,13 +145,13 @@ int ServerStore::append_log(entry& logEntry) {
         return -1;
     }
 
-    std::ofstream logOut;
+
 
     // for test 
     // logOut.open(LOG, std::ios::trunc | std::ios::binary);
 
 
-    logOut.open(LOG, std::ios::app | std::ios::binary);
+    
     
     logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
     logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
@@ -151,7 +159,7 @@ int ServerStore::append_log(entry& logEntry) {
     logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));
     const char* c = logEntry.content.c_str();
     logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
-    logOut.close();
+    // logOut.close();
 
     // unlock
     pthread_rwlock_unlock(&loglock);
@@ -168,9 +176,9 @@ int ServerStore::read_log(int index, entry& logEntry) {
         return -1;
     }
 
-    std::ifstream logIn;
+    // std::ifstream logIn;
 
-    logIn.open(LOG, std::ios::binary);
+    // logIn.open(LOG, std::ios::binary);
     logIn.seekg(index * entrySize, std::ios_base::beg);
     logIn.read(reinterpret_cast<char *>(&logEntry.command), sizeof(logEntry.command));
     logIn.read(reinterpret_cast<char *>(&logEntry.term), sizeof(logEntry.term));
@@ -181,7 +189,7 @@ int ServerStore::read_log(int index, entry& logEntry) {
     std::cout << s << std::endl;
     logEntry.content = s;
 
-    logIn.close();
+    // logIn.close();
 
     //unlock
     pthread_rwlock_unlock(&loglock);
