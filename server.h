@@ -92,19 +92,24 @@ std::atomic<int> role;
 /* Persistent State */
 
 
-typedef struct logEntry_ {
-    int commmand;
-    int term;
-}logEntry;
+// typedef struct logEntry_ {
+//     int commmand;
+//     int term;
+// }logEntry;
 
-typedef struct persistStates_ {
-    std::atomic<int> currentTerm{0};   // init to 0
-    int votedFor = -1;  // init to -1
-    int entryNum = 0;
-    std::vector<entry> raftLog;
-}persistStates;
+// typedef struct persistStates_ {
+//     std::atomic<int> currentTerm{0};   // init to 0
+//     std::atomic<int> votedFor{-1};  // init to -1
+//     std::atomic<int entryNum = 0;
+//     std::vector<entry> raftLog;
+// }persistStates;
 
-persistStates pStates;
+// persistStates pStates;
+
+std::atomic<int> currentTerm{0};   // init to 0
+std::atomic<int> votedFor{-1};  // init to -1
+std::atomic<int> entryNum{0};
+std::vector<entry> raftLog;
 
 /* Volatile State on all servers */
 int commitIndex; // init from 0
