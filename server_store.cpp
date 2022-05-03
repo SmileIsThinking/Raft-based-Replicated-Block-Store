@@ -12,6 +12,9 @@ int state_fd = -1;
 
 
 int curr_seq = 0;
+
+const int entrySize = 2 * sizeof(int32_t) + sizeof(int64_t) + BLOCK_SIZE;
+
 pthread_rwlock_t rwlock;
 
 pthread_rwlock_t loglock;
@@ -120,12 +123,68 @@ int ServerStore::full_write(std::string& content) {
 /* Raft States Update */
 /* ===================================== */
 
-int ServerStore::append_log() {
+int ServerStore::append_log(entry& logEntry) {
+    std::string s(BLOCK_SIZE, ' ');
+    if(logEntry.command == 0) {
+        logEntry.content = s;
+    }
+    std::cout << "size: " << sizeof(logEntry) << std::endl;
+
+    // lock
+    int ret = pthread_rwlock_wrlock(&loglock);
+    if (ret != 0) {
+        std::cout << "STATE LOCK ERROR!" << std::endl;
+        return -1;
+    }
+
+    std::ofstream logOut;
+
+    // for test 
+    // logOut.open(LOG, std::ios::trunc | std::ios::binary);
+
+
+    logOut.open(LOG, std::ios::app | std::ios::binary);
+    
+    logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
+    logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
+    std::cout << sizeof(logEntry.address) << std::endl;
+    logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));
+    const char* c = logEntry.content.c_str();
+    logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
+    logOut.close();
+
+    // unlock
+    pthread_rwlock_unlock(&loglock);
 
     return 0;
 }
 
-int ServerStore::read_log() {
+int ServerStore::read_log(int index, entry& logEntry) {
+
+    // lock
+    int ret = pthread_rwlock_rdlock(&loglock);
+    if (ret != 0) {
+        std::cout << "LOCK ERROR!" << std::endl;
+        return -1;
+    }
+
+    std::ifstream logIn;
+
+    logIn.open(LOG, std::ios::binary);
+    logIn.seekg(index * entrySize, std::ios_base::beg);
+    logIn.read(reinterpret_cast<char *>(&logEntry.command), sizeof(logEntry.command));
+    logIn.read(reinterpret_cast<char *>(&logEntry.term), sizeof(logEntry.term));
+    logIn.read(reinterpret_cast<char *>(&logEntry.address), sizeof(logEntry.address));
+    char c[BLOCK_SIZE];
+    logIn.read(c, BLOCK_SIZE);
+    std::string s(c);
+    std::cout << s << std::endl;
+    logEntry.content = s;
+
+    logIn.close();
+
+    //unlock
+    pthread_rwlock_unlock(&loglock);
 
     return 0;
 }
@@ -141,23 +200,38 @@ int ServerStore::update_state(int currentTerm, int votedFor) {
     // lseek(state_fd, 0, SEEK_SET);
     
     int len = s.size();
-    pwrite(fd, s.c_str(), len, 0);
+    pwrite(state_fd, s.c_str(), len, 0);
     pthread_rwlock_unlock(&statelock);
 
     return 0;
 }
 
-int ServerStore::read_state() {
-    // std::cout << "read(" << addr << ")" << std::endl;
-    // char* buf = new char[BLOCK_SIZE];
-    // int ret = pthread_rwlock_rdlock(&rwlock);
-    // if (ret != 0) {
-    //     std::cout << "LOCK ERROR!" << std::endl;
-    //     return -1;
-    // }
-    // pread(fd, buf, BLOCK_SIZE, addr);
-    // pthread_rwlock_unlock(&rwlock);
-    // value = std::string(buf);
-    // delete[] buf;
+int ServerStore::read_state(int* currentTerm, int* votedFor) {
+    struct stat fileStat;
+    int ret = pthread_rwlock_rdlock(&statelock);
+    if (ret != 0) {
+        std::cout << "LOCK ERROR!" << std::endl;
+        return -1;
+    }
+
+    fstat(state_fd, &fileStat);
+    char* buf = new char[fileStat.st_size + 1];
+    pread(state_fd, buf, fileStat.st_size + 1, 0);
+    pthread_rwlock_unlock(&rwlock);
+
+    std::string s(buf);
+    std::string token;
+    size_t pos = 0;
+    std::string delimiter = " ";
+    while ((pos = s.find(" ")) != std::string::npos) {
+        token = s.substr(0, pos);
+        // std::cout << token << std::endl;
+        *currentTerm = std::stoi(token);
+        s.erase(0, pos + delimiter.length());
+    }    
+    *votedFor = std::stoi(s);
+    // content = std::string(buf);
+    delete[] buf;
+
     return 0;
 }
