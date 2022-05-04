@@ -92,11 +92,11 @@
 void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
   // not a leader
   // TODO: what if currently there is no leader
-  while(leaderID != -1);
+  while(leaderID.load() != -1);
   if (role.load() != 0) {
     std::cerr << "read: Not a leader" << std::endl;
     _return.rc = Errno::NOT_LEADER;
-    _return.node_id = leaderID;
+    _return.node_id = leaderID.load();
     return;
   }
 
@@ -134,7 +134,7 @@ void blob_rpcHandler::write(write_ret& _return, const int64_t addr, const std::s
   if (role.load() != 0) {
     std::cerr << "write: Not a leader" << std::endl;
     _return.rc = Errno::NOT_LEADER;
-    _return.node_id = leaderID;
+    _return.node_id = leaderID.load();
     return ;
   }
 
@@ -364,7 +364,7 @@ void send_request_votes(const request_vote_args& requestVote) {
     std::cerr << "Not a Candidate !!" << std::endl;
     return;
   }
-
+  
   (pStates.currentTerm)++;
   request_vote_reply ret[NODE_NUM];
 
