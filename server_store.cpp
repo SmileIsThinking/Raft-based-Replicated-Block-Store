@@ -144,20 +144,11 @@ int ServerStore::append_log(entry& logEntry) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
         return -1;
     }
-
-
-
-    // for test 
-    // logOut.open(LOG, std::ios::trunc | std::ios::binary);
-
-
-    
     
     logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
     logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
     std::cout << sizeof(logEntry.address) << std::endl;
     logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));
-    const char* c = logEntry.content.c_str();
     logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
     // logOut.close();
 
@@ -197,7 +188,7 @@ int ServerStore::read_log(int index, entry& logEntry) {
     return 0;
 }
 
-int ServerStore::update_state(int currentTerm, int votedFor) {
+int ServerStore::write_state(int currentTerm, int votedFor) {
     int ret = pthread_rwlock_wrlock(&statelock);
     if (ret != 0) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
@@ -233,12 +224,10 @@ int ServerStore::read_state(int* currentTerm, int* votedFor) {
     std::string delimiter = " ";
     while ((pos = s.find(" ")) != std::string::npos) {
         token = s.substr(0, pos);
-        // std::cout << token << std::endl;
         *currentTerm = std::stoi(token);
         s.erase(0, pos + delimiter.length());
     }    
     *votedFor = std::stoi(s);
-    // content = std::string(buf);
     delete[] buf;
 
     return 0;
