@@ -1,24 +1,30 @@
 enum Errno {
     SUCCESS = 0,
-    BACKUP = 1,
+    NOT_LEADER = 1,
     UNEXPECTED = 99,
 }
 
 struct read_ret {
     1: Errno rc,
     2: string value,
+    3: i32 node_id,
+}
+
+struct write_ret {
+    1: Errno rc,
+    2: i32 node_id,
 }
 
 service blob_rpc {
     void ping(),
     read_ret read(1:i64 addr),
-    Errno write(1:i64 addr, 2:string value),
+    write_ret write(1:i64 addr, 2:string value),
 }
 
 enum PB_Errno {
     SUCCESS = 0,
-    NOT_BACKUP = 1,
-    NOT_PRIMARY = 2,
+    IS_LEADER = 1,
+    NOT_LEADER = 2,
     BACKUP_EXISTS = 3,
     UNEXPECTED = 99,
 }
@@ -32,7 +38,7 @@ service pb_rpc {
     void ping(),
     new_backup_ret new_backup(1:string hostname, 2:i32 port),
     oneway void new_backup_succeed();
-    PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
+    # PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
     oneway void heartbeat(),
 }
 
@@ -77,6 +83,7 @@ struct append_entries_reply {
 
 service raft_rpc {
     void ping(),
+    PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
 }

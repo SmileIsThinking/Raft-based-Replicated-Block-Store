@@ -26,10 +26,10 @@ int write(const int64_t address, std::string& write){
 }
 
 void padding(std::string& string, int size){
-    if(string.size() == size){
+    if((int)string.size() == size){
         return;
     }
-    if(string.size() > size){
+    if((int)string.size() > size){
         string = string.substr(0, size);
         std::cout << "write size is greater than 4K, has been trimed" << std::endl;
     }

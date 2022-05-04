@@ -7,15 +7,18 @@
 
 #include "util.h"
 
+
 void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
-  // Read from a backup
-  if (!is_primary.load()) {
-    std::cerr << "read: Not a Primary" << std::endl;
-    _return.rc = Errno::BACKUP;
+  // not a leader
+  // TODO: what if currently there is no leader
+  while(leaderID.load() != -1);
+  if (role.load() != 0) {
+    std::cerr << "read: Not a leader" << std::endl;
+    _return.rc = Errno::NOT_LEADER;
+    _return.node_id = leaderID.load();
     return;
   }
 
-  // TODO: check for return values  
   if (ServerStore::read(addr, _return.value) == 0) {
     _return.rc = Errno::SUCCESS;
     return;
@@ -25,55 +28,12 @@ void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
   return;
 }
 
-Errno::type blob_rpcHandler::write(const int64_t addr, const std::string& value) {
-  // Write to a backup
-  if (!is_primary.load()) {
-    std::cerr << "write: Not a Primary" << std::endl;
-    return Errno::BACKUP;
-  }
-
-retry:
-  // creating a copy to backup, block write requests
-  while (pending_backup.load());
-  // exist write requests, block whole file read for creating new backups
-  num_write_requests.fetch_add(1, std::memory_order_acq_rel);
-  // in case of race condition
-  if (pending_backup.load()) {
-    num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-    goto retry;
-  }
-
-  int64_t seq;
-  int result = ServerStore::write(addr, value, seq);
-
-  // done with writing
-  num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-
-  if (result != 0)
-    return Errno::UNEXPECTED;
-  if (!has_backup.load())
-    return Errno::SUCCESS;
-  // TODO: check for return values  
-  try {
-    PB_Errno::type reply = other->update(addr, value, seq);
-    if (reply == PB_Errno::SUCCESS)
-      return Errno::SUCCESS;
-    else
-      // should not happen
-      return Errno::UNEXPECTED;
-  } catch (TTransportException) {
-    std::cerr << "Backup Failure" << std::endl;
-    has_backup.store(false);
-    return Errno::SUCCESS;
-  }
-}
-
-PB_Errno::type pb_rpcHandler::update(const int64_t addr, const std::string& value, const int64_t seq) {
+PB_Errno::type raft_rpcHandler::update(const int64_t addr, const std::string& value, const int64_t seq) {
   static std::atomic<int64_t> curr_seq(0);
 
-  if (is_primary.load()) {
-    std::cerr << "update: Not a Primary" << std::endl;
-    return PB_Errno::NOT_BACKUP;
+  if (role.load() == 0) {
+    std::cerr << "update: is a leader" << std::endl;
+    return PB_Errno::IS_LEADER;
   }
   // Wait for previous updates to complete
   while (curr_seq.load() != seq);
@@ -87,6 +47,63 @@ PB_Errno::type pb_rpcHandler::update(const int64_t addr, const std::string& valu
   else
     // Backup fail to make copy, crash to avoid inconsistency
     exit(1);
+}
+void blob_rpcHandler::write(write_ret& _return, const int64_t addr, const std::string& value) {
+  // Write to not leader
+  if (role.load() != 0) {
+    std::cerr << "write: Not a leader" << std::endl;
+    _return.rc = Errno::NOT_LEADER;
+    _return.node_id = leaderID.load();
+    return ;
+  }
+
+retry:
+
+  // creating a copy to followers, block write requests
+  while (pending_candidate.load());
+  // exist write requests, block whole file read for creating new backups
+  num_write_requests.fetch_add(1, std::memory_order_acq_rel);
+  // in case of race condition
+  if (pending_candidate.load()) {
+    num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+    goto retry;
+  }
+
+  int64_t seq;
+  entry e;
+  e.term = currentTerm.load();
+  e.command = 1;
+  e.content = value;
+  raftLog.push_back(e);
+  int result = ServerStore::write(addr, value, seq);
+
+  // done with writing
+  num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+
+  if (result != 0){
+    _return.rc = Errno::UNEXPECTED;
+    return ;
+  }
+    
+  // TODO : write request
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
+    std::cout << "send write value to replicas " << i << std::endl;
+    PB_Errno::type reply = rpcServer[i]->update(addr, value, seq);
+    if (reply == PB_Errno::SUCCESS){
+      _return.rc = Errno::SUCCESS;
+      return ;
+    }
+    else{
+      _return.rc = Errno::UNEXPECTED;
+      return ;
+    }
+      // should not happen
+      
+  }
+  
 }
 
 void pb_rpcHandler::heartbeat() {
@@ -125,7 +142,7 @@ void new_backup_helper() {
 void pb_rpcHandler::new_backup(new_backup_ret& _return, const std::string& hostname, const int32_t port) {
   if (!is_primary.load()) {
     std::cerr << "new_backup: Not a Primary" << std::endl;
-    _return.rc = PB_Errno::NOT_PRIMARY;
+    _return.rc = PB_Errno::NOT_LEADER;
     return;
   }
 
@@ -302,7 +319,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
       ret.voteGranted = true;
       votedFor.store(requestVote.candidateId);  
       return;
-    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= raftLog.size()) {
+    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       votedFor.store(requestVote.candidateId);   
       return;  
@@ -399,7 +416,7 @@ void send_request_votes() {
 bool check_prev_entries(int prev_term, int prev_index){
     if (prev_index == 0 && raftLog.empty()){
         return true;
-    } else if(prev_index > 0 && prev_index<=raftLog.size()){
+    } else if(prev_index > 0 && prev_index<=(int)raftLog.size()){
         if(prev_term == raftLog[prev_index-1].term){  //todo: -1 correct? based on implementation if init idx = 0, first log = 1, correct
             return true;
         }
@@ -408,7 +425,7 @@ bool check_prev_entries(int prev_term, int prev_index){
 }
 
 void append_logs(const std::vector<entry>& logs, int idx){
-    if (raftLog.size() > idx){ //todo: check index
+    if ((int)raftLog.size() > idx){ //todo: check index
         raftLog.erase(raftLog.begin() + idx, raftLog.end());
     }
     raftLog.insert(raftLog.end(), logs.begin(), logs.end());
@@ -505,6 +522,7 @@ void server_init(int ID) {
   /* raft init */
   myID = ID;
 
+  leaderID.store(-1);
 
   // TODO: read from persistent store
   int term;
@@ -566,3 +584,4 @@ int main(int argc, char** argv) {
   pb.join();
   return 0;
 }
+
