@@ -151,8 +151,8 @@ retry:
   }
 
   int64_t seq;
-  logEntry_ e;
-  e.term = pStates.currentTerm;
+  entry e;
+  e.term = currentTerm.load();
   e.command = 1;
   e.content = value;
   pStates.raftLog.push_back(e);
@@ -328,45 +328,90 @@ void raft_rpc_init() {
     syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
     rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
     transport->open();
-//    rpcServer[i]->ping();
+    rpcServer[i]->ping();
   }
   return;
+}
+
+
+
+// TODO: follower timeout
+void toFollower(int term) {
+  pthread_rwlock_wrlock(&rolelock);
+
+  role.store(2);
+  int vote = -1;
+
+  ServerStore::write_state(term, vote);
+  currentTerm.store(term);
+  votedFor.store(vote); 
+
+  pthread_rwlock_unlock(&rolelock);
+}
+
+void toCandidate() {
+  pthread_rwlock_wrlock(&rolelock);
+
+  role.store(1);
+  int term = currentTerm.load() + 1;
+  int vote = myID;
+
+  ServerStore::write_state(term, vote);
+  currentTerm.store(term);
+  votedFor.store(vote);
+
+  pthread_rwlock_unlock(&rolelock);
+}
+
+void toLeader() {
+  pthread_rwlock_wrlock(&rolelock);
+  role.store(0);
+
+
+  pthread_rwlock_unlock(&rolelock);
 }
 
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
   std::cout << "get vote request" << std::endl;
 
-  if(requestVote.term < pStates.currentTerm.load()) {
+  if(requestVote.term < currentTerm.load()) {
     ret.voteGranted = false;
-    ret.term = pStates.currentTerm.load();
+    ret.term = currentTerm.load();
     return;
   }
+
+  if(requestVote.term > currentTerm.load()) {
+    toFollower(requestVote.term);
+  }
   
-
-  if(((requestVote.term > pStates.currentTerm.load()) || (requestVote.term == pStates.currentTerm.load() && (requestVote.candidateId == pStates.votedFor || pStates.votedFor != -1))) && 
-    ((requestVote.lastLogTerm > pStates.currentTerm.load()) || (requestVote.lastLogTerm == pStates.currentTerm.load() && requestVote.lastLogIndex > (int)pStates.raftLog.size()) )){
+  int vote = votedFor.load();
+  if(vote == -1 || vote == requestVote.candidateId) {
+    if(requestVote.lastLogTerm > currentTerm.load()) {
       ret.voteGranted = true;
-      ret.term = requestVote.term;
-      pStates.votedFor = requestVote.candidateId;
-      // TODO: set the current server as follower
+      votedFor.store(requestVote.candidateId);  
+      return;
+    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= raftLog.size()) {
+      ret.voteGranted = true;
+      votedFor.store(requestVote.candidateId);   
+      return;  
+    } 
+  }
 
-    }
-
+  ret.voteGranted = false;
+  ret.term = currentTerm.load();
+  return;    
  
 }
 
-// void send_request_vote(int ID, const request_vote_args& requestVote) {
-
-// }
-
+// TODO: election timeout randomly in [T, 2T] (T >> RTT)
 void send_request_votes(const request_vote_args& requestVote) {
   if(role.load() != 1) {
     std::cerr << "Not a Candidate !!" << std::endl;
     return;
   }
 
-//  (pStates.currentTerm)++;
-  pStates.currentTerm.store(pStates.currentTerm.load() + 1);
+  // currentTerm.store(currentTerm.load() + 1);
+  // votedFor.store(-1);
   request_vote_reply ret[NODE_NUM];
 
   // TODO: multi-thread requests
@@ -393,10 +438,10 @@ void send_request_votes(const request_vote_args& requestVote) {
 }
 
 bool check_prev_entries(int prev_term, int prev_index){
-    if (prev_index == 0 && pStates.raftLog.empty()){
+    if (prev_index == 0 && raftLog.empty()){
         return true;
-    } else if(prev_index > 0 && prev_index<=pStates.raftLog.size()){
-        if(prev_term == pStates.raftLog[prev_index-1].term){  //todo: -1 correct? based on implementation if init idx = 0, first log = 1, correct
+    } else if(prev_index > 0 && prev_index<=raftLog.size()){
+        if(prev_term == raftLog[prev_index-1].term){  //todo: -1 correct? based on implementation if init idx = 0, first log = 1, correct
             return true;
         }
     }
@@ -404,33 +449,38 @@ bool check_prev_entries(int prev_term, int prev_index){
 }
 
 void append_logs(const std::vector<entry>& logs, int idx){
-    if (pStates.raftLog.size() > idx){ //todo: check index
-        pStates.raftLog.erase(pStates.raftLog.begin() + idx, pStates.raftLog.end());
+    if (raftLog.size() > idx){ //todo: check index
+        raftLog.erase(raftLog.begin() + idx, raftLog.end());
     }
-    pStates.raftLog.insert(pStates.raftLog.end(), logs.begin(), logs.end());
+    raftLog.insert(raftLog.end(), logs.begin(), logs.end());
 }
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
-  if(pStates.entryNum > 0){
-      printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, pStates.votedFor);
+
+  if(appendEntries.term > currentTerm.load()) {
+    toFollower(appendEntries.term);
+  }
+
+  if(entryNum > 0){
+      printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   }
   //todo: update timer for local node
-  if(appendEntries.term < pStates.currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
+  if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       ret.success = false;
   } else{
       // success
       //todo:set current as follower, if curr node is proposing to be the leader
-      pStates.currentTerm.store(appendEntries.term);
-      pStates.votedFor = appendEntries.leaderId;
+      currentTerm.store(appendEntries.term);
+      votedFor = appendEntries.leaderId;
       //todo: append/replace entries beginning the index and CHECK the TYPE DEFINE
       append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-      pStates.entryNum = appendEntries.leaderCommit; //todo: correct?
+      entryNum = appendEntries.leaderCommit; //todo: correct?
       ret.success = true;
   }
-  ret.term = pStates.currentTerm;
+  ret.term = currentTerm;
   // todo: write to disk implementation
-  ServerStore::append_log();
+  // ServerStore::append_log();
 }
 
 void send_appending_request(){
@@ -444,20 +494,20 @@ void send_appending_request(){
         }
         // for each server, need to lock the raftlog
         // todo: check the index correctness
-        int curr_entry = pStates.raftLog.size();
+        int curr_entry = raftLog.size();
         append_entries_args curr_args;
-        curr_args.term = pStates.currentTerm.load();
+        curr_args.term = currentTerm.load();
         while(curr_entry-- > 0){
             append_entries_reply curr_ret;
             curr_args.prevLogIndex = curr_entry - 1;
-            curr_args.prevLogTerm = pStates.raftLog[curr_args.prevLogIndex].term;
+            curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
             curr_args.leaderId = myID;
-            curr_args.entries = {pStates.raftLog.begin() + curr_args.prevLogIndex - 1, pStates.raftLog.end()};
+            curr_args.entries = {raftLog.begin() + curr_args.prevLogIndex - 1, raftLog.end()};
             rpcServer[i]->append_entries(curr_ret, curr_args);
             if (curr_ret.success){
                 break;
             }
-            if(curr_ret.term > pStates.currentTerm.load()){
+            if(curr_ret.term > currentTerm.load()){
                 // todo: ??? what happened ???
             }
         }
@@ -486,11 +536,10 @@ void start_raft_server(int id) {
 }
 
 
-
-
-
-
-
+void server_init() {
+  pthread_rwlock_init(&rolelock, NULL);
+  leaderID.store(-1);
+}
 
 int main(int argc, char** argv) {
   // TODO: change the logic for which is primary
@@ -501,7 +550,7 @@ int main(int argc, char** argv) {
 
   /* raft init */
   myID = std::atoi(argv[1]);
-  raft_rpc_init();
+  // raft_rpc_init();
 
 
 

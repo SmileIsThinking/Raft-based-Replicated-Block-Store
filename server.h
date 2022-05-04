@@ -1,5 +1,3 @@
-#define HB_FREQ 5
-
 #include "gen-cpp/blob_rpc.h"
 #include "gen-cpp/pb_rpc.h"
 #include "gen-cpp/raft_rpc.h"
@@ -27,6 +25,14 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::server;
+
+
+#define HB_FREQ 5
+#define VOTE_TIMEOUT  3 // gap between different requestVote rpc
+#define TO_CANDIDATE  3 // does not receive appendEntry in timeout and convert to candidate
+time_t last_vote_sending;
+time_t last_append_receiving;
+
 
 std::string my_addr;
 int my_blob_port;
@@ -76,9 +82,9 @@ public:
 /* ===================================== */
 /* Raft Misc Variables */
 /* ===================================== */
-std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr, nullptr, nullptr};
+std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr};
 std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> \
-syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
+syncInfo[NODE_NUM] = {nullptr};
 
 int myID;
 
@@ -88,7 +94,7 @@ std::atomic<int> leaderID;
 // 1: Candidate
 // 2: Follower
 std::atomic<int> role;
-
+pthread_rwlock_t rolelock;
 
 /* ===================================== */
 /* Raft States  */
@@ -96,20 +102,26 @@ std::atomic<int> role;
 /* Persistent State */
 
 
-typedef struct logEntry_ {
-    int command;
-    int term;
-    std::string content;
-}logEntry;
+// typedef struct logEntry_ {
+//     int commmand;
+//     int term;
+// }logEntry;
 
-typedef struct persistStates_ {
-    std::atomic<int> currentTerm{0};   // init to 0
-    int votedFor = -1;  // init to -1
-    int entryNum = 0;
-    std::vector<entry> raftLog;
-}persistStates;
+// typedef struct persistStates_ {
+//     std::atomic<int> currentTerm{0};   // init to 0
+//     std::atomic<int> votedFor{-1};  // init to -1
+//     std::atomic<int entryNum = 0;
+//     std::vector<entry> raftLog;
+// }persistStates;
 
-persistStates pStates;
+// persistStates pStates;
+
+std::atomic<int> currentTerm{0};   // init to 0
+std::atomic<int> votedFor{-1};  // init to -1
+std::atomic<int> entryNum{0};
+std::vector<entry> raftLog;
+// TODO: log vector lock?
+
 
 /* Volatile State on all servers */
 int commitIndex; // init from 0
@@ -135,3 +147,8 @@ public:
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };
+
+
+void raft_rpc_init();
+void toFollower(int term);
+void toLeader();
