@@ -413,27 +413,30 @@ void send_request_votes() {
   return;
 }
 
-bool check_prev_entries(int prev_term, int prev_index){
-    if (prev_index == 0 && raftLog.empty()){
-        return true;
-    } else if(prev_index > 0 && prev_index<=(int)raftLog.size()){
-        if(prev_term == raftLog[prev_index-1].term){  //todo: -1 correct? based on implementation if init idx = 0, first log = 1, correct
-            return true;
+bool check_prev_entries(int prev_term, int prev_index){  // ret true if sth wrong
+    if (prev_index == -1 && raftLog.empty()){
+        return false;
+    } else if(prev_index >= 0 && prev_index<=(int)raftLog.size()-1){
+        if(prev_term == raftLog[prev_index].term){
+            return false;
         }
     }
-    return false;
+    return true;
 }
 
 void append_logs(const std::vector<entry>& logs, int idx){
-    if ((int)raftLog.size() > idx){ //todo: check index
-        raftLog.erase(raftLog.begin() + idx, raftLog.end());
+    // not idx is the appending entries' prev log index
+    if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx idx + 1
+        raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
     }
+    // todo: check if end() starts with begin
     raftLog.insert(raftLog.end(), logs.begin(), logs.end());
 }
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
 
+  //todo: update timer for local node
   if(appendEntries.term > currentTerm.load()) {
     toFollower(appendEntries.term);
   }
@@ -441,19 +444,17 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   if(entryNum > 0){
       printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   }
-  //todo: update timer for local node
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       ret.success = false;
   } else{
       // success
-      //todo:set current as follower, if curr node is proposing to be the leader
       // currentTerm.store(appendEntries.term);
       // votedFor = appendEntries.leaderId;
       toFollower(appendEntries.term);
 
-      //todo: append/replace entries beginning the index and CHECK the TYPE DEFINE
       append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-      entryNum = appendEntries.leaderCommit; //todo: correct?
+      commitIndex = appendEntries.leaderCommit;
+      entryNum = (int)raftLog.size();
       ret.success = true;
   }
   ret.term = currentTerm;
@@ -461,33 +462,44 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   // ServerStore::append_log();
 }
 
-void send_appending_requests(){
+void send_appending_requests(){  // this is the sender
+    // todo: add multi threaded implementation
     if(role.load() != 1) {
         std::cerr << "Not a Candidate !!" << std::endl;
         return;
     }
+    int ack_success = 0;  // need to be concurrent one with load/fetch_add
     for (int i = 0; i < NODE_NUM; i++) {
         if(i == myID) {
             continue;
         }
         // for each server, need to lock the raftlog
         // todo: check the index correctness
-        int curr_entry = raftLog.size();
+        int curr_entry = (int)raftLog.size() - 1;  // note the index starts from zero nextIndex[] ???
         append_entries_args curr_args;
         curr_args.term = currentTerm.load();
-        while(curr_entry-- > 0){
+        while(curr_entry >= 0){
             append_entries_reply curr_ret;
             curr_args.prevLogIndex = curr_entry - 1;
-            curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
+            if (curr_entry > 0){
+                curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
+            } else{
+                curr_args.prevLogTerm = 0;  // todo: if term init to 0?
+            }
             curr_args.leaderId = myID;
-            curr_args.entries = {raftLog.begin() + curr_args.prevLogIndex - 1, raftLog.end()};
+            curr_args.leaderCommit = commitIndex;
+            curr_args.entries = {raftLog.begin() + curr_entry, raftLog.end()};
+            //
             rpcServer[i]->append_entries(curr_ret, curr_args);
             if (curr_ret.success){
+                ack_success++;
                 break;
             }
             if(curr_ret.term > currentTerm.load()){
-                // todo: ??? what happened ???
+                // todo: ??? what happened ??? I am not leader???
             }
+            //
+            curr_entry--;
         }
     }
 }
