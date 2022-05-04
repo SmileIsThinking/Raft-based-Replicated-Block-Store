@@ -267,10 +267,20 @@ void toCandidate() {
 
 void toLeader() {
   pthread_rwlock_wrlock(&rolelock);
+
   role.store(0);
-
-
+  leaderID.store(myID);
   pthread_rwlock_unlock(&rolelock);
+
+  pthread_rwlock_rdlock(&raftloglock);
+  int index = raftLog.size() - 1;
+
+  pthread_rwlock_unlock(&raftloglock);
+  for(int i = 0; i < NODE_NUM; i++) {
+    nextIndex[i] = index + 1;
+    matchIndex[i] = 0;
+  }
+
 }
 
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
@@ -305,37 +315,84 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
  
 }
 
-// TODO: election timeout randomly in [T, 2T] (T >> RTT)
-void send_request_votes(const request_vote_args& requestVote) {
+void send_vote(int ID, request_vote_reply* ret, const request_vote_args& requestVote) {
+  rpcServer[ID]->request_vote(ret[ID], requestVote);
+  return;
+}
+
+
+void send_request_votes() {
   if(role.load() != 1) {
     std::cerr << "Not a Candidate !!" << std::endl;
     return;
   }
 
-  // currentTerm.store(currentTerm.load() + 1);
-  // votedFor.store(-1);
+  // requestVote init
+  request_vote_args requestVote;
+  requestVote.term = currentTerm.load();
+  requestVote.candidateId = myID;
+  pthread_rwlock_rdlock(&raftloglock);
+  int index = raftLog.size() - 1;
+  requestVote.lastLogIndex = index;
+  requestVote.lastLogTerm = raftLog[index].term;
+  pthread_rwlock_unlock(&raftloglock);
+
   request_vote_reply ret[NODE_NUM];
 
   // TODO: multi-thread requests
-  // std::thread* threadPool[NODE_NUM] = {nullptr};
+  std::thread* requestThread = nullptr;
+
   for(int i = 0; i < NODE_NUM; i++) {
     if(i == myID) {
       ret[i].voteGranted = true;
       continue;
     }
     std::cout << "send vote request to " << i << std::endl;
-    rpcServer[i]->request_vote(ret[i], requestVote);
+    // rpcServer[i]->request_vote(ret[i], requestVote);
+
+    requestThread = new std::thread(send_vote, i, ret, requestVote);
+    requestThread->detach();
   }
 
-  int count = 0;
-  for(auto & i : ret) {
-    if(i.voteGranted){
-      count++;
+  time(&last_election);
+
+  // random election timeout in [T, 2T] (T >> RTT)
+  srand (time(NULL));
+  int real_timeout = rand() % ELECTION_TIMEOUT + ELECTION_TIMEOUT;
+
+  while(1) {
+    if(role.load() != 1) {
+      std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+      return;
+    }
+    int count = 0;
+    time_t curr = time(NULL);
+    if(curr - last_election > real_timeout) {
+      break;
+    }
+    for(int i = 0; i < NODE_NUM; i++) {
+      if(ret[i].voteGranted == true) {
+        count++;
+      }
+    }
+    if(count >= MAJORITY) {
+      toLeader();
+
+      // new thread???
+      std::thread(send_appending_request).detach();
+      return;
     }
   }
-  if(count >= MAJORITY) {
-    role.store(0);
+
+  if(role.load() != 1) {
+    std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+    return;
   }
+
+  toCandidate();
+  std::thread(send_request_votes).detach();
+  // send_request_votes();
+  
   return;
 }
 
@@ -373,8 +430,10 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   } else{
       // success
       //todo:set current as follower, if curr node is proposing to be the leader
-      currentTerm.store(appendEntries.term);
-      votedFor = appendEntries.leaderId;
+      // currentTerm.store(appendEntries.term);
+      // votedFor = appendEntries.leaderId;
+      toFollower(appendEntries.term);
+
       //todo: append/replace entries beginning the index and CHECK the TYPE DEFINE
       append_logs(appendEntries.entries, appendEntries.prevLogIndex);
       entryNum = appendEntries.leaderCommit; //todo: correct?
@@ -438,19 +497,28 @@ void start_raft_server(int id) {
 }
 
 
-void server_init() {
+void server_init(int ID) {
   pthread_rwlock_init(&rolelock, NULL);
+
+  pthread_rwlock_init(&raftloglock, NULL);
+
+  /* raft init */
+  myID = ID;
+
+
+  // TODO: read from persistent store
+  int term;
+  toFollower(term);
 }
 
 int main(int argc, char** argv) {
-  // TODO: change the logic for which is primary
-  if (argc != 2 && argc != 3) {
-    std::cout << "Usage: ./server <my_node_id> [primary_node_id]" << std::endl;
+  if (argc != 2) {
+    std::cout << "Usage: ./server <my_node_id> " << std::endl;
     return 1;
   }
 
-  /* raft init */
-  myID = std::atoi(argv[1]);
+  server_init(std::atoi(argv[1]));
+
   // raft_rpc_init();
 
 
