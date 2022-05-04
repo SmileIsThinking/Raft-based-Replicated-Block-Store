@@ -33,7 +33,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
         try_time++;
         try{
             server = rand() % NODE_NUM;
-            conn_init(nodeAddr(server), raftPort(server));
+            conn_init(nodeAddr[server], raftPort[server]);
             client->read(ret_res, address);
 
             if(ret_res.rc == Errno::SUCCESS) {
@@ -53,7 +53,6 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
 }
 
 Errno::type BlockStore::write(const int64_t address, std::string& write, int retry_time, int sleep_time) {
-    Errno::type error;
     std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
     write_ret ret_res;
@@ -61,16 +60,16 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ret
         tries--;
         try{
             server = rand() % NODE_NUM;
-            conn_init(nodeAddr(server), raftPort(server));
-            error = client->write(ret_res, address, write);
-            std::cout<<error<<std::endl;;
+            conn_init(nodeAddr[server], raftPort[server]);
+            client->write(ret_res, address, write);
+            std::cout<<ret_res.rc<<std::endl;;
 
-            if(error == Errno::NOT_LEADER){
+            if(ret_res.rc == Errno::NOT_LEADER){
                 // reconnect to backup, change host
                 server = ret_res.node_id;
                 std::cout<<"reconnect to node "<<server<<std::endl;
-            } else if(error == Errno::SUCCESS){
-                return error;
+            } else if(ret_res.rc== Errno::SUCCESS){
+                return ret_res.rc;
             }
         } catch (TException &tx){
             // dosth
@@ -79,5 +78,5 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ret
             sleep(sleep_time);
         }
     }
-    return error;
+    return ret_res.rc;
 }

@@ -32,6 +32,8 @@ std::string my_addr;
 int my_blob_port;
 int my_pb_port;
 
+std::atomic<bool> pending_backup;
+std::atomic<bool> is_primary;
 std::atomic<bool> is_leader;
 time_t last_heartbeat;
 // assuming single backup
@@ -52,7 +54,7 @@ public:
     }
 
     void read(read_ret& _return, const int64_t addr);
-    Errno::type write(const int64_t addr, const std::string& value);
+    void write(write_ret& _return, const int64_t addr, const std::string& value);
 };
 
 class pb_rpcHandler : virtual public pb_rpcIf {
@@ -67,7 +69,7 @@ public:
 
     void new_backup(new_backup_ret& ret, const std::string& hostname, const int32_t port);
     void new_backup_succeed();
-    PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
+    // PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
     void heartbeat();
 };
 
@@ -80,7 +82,7 @@ syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
 
 int myID;
 
-int leaderID = NULL;
+std::atomic<int> leaderID;
 
 // 0: Leader
 // 1: Candidate
@@ -95,8 +97,9 @@ std::atomic<int> role;
 
 
 typedef struct logEntry_ {
-    int commmand;
+    int command;
     int term;
+    std::string content;
 }logEntry;
 
 typedef struct persistStates_ {
@@ -128,7 +131,7 @@ public:
     void ping() {
         printf("%n: raft ping n", &myID);
     }
-
+    PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };
