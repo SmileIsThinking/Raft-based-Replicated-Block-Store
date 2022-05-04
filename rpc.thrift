@@ -60,9 +60,11 @@ struct request_vote_reply {
 
 
 struct entry {
+    // 0: read, 1: write
     1: i32 command,
-    2: i32 term,
-    3: string content,   
+    2: i32 term,   
+    3: i64 address,
+    4: string content,
 }
 
 struct append_entries_args {
