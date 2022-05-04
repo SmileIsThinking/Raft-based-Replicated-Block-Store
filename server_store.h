@@ -18,7 +18,7 @@ namespace ServerStore {
     int append_log(entry& logEntry);
     int read_log(int index, entry& logEntry);
     
-    int update_state(int currentTerm, int votedFor);
+    int write_state(int currentTerm, int votedFor);
     int read_state(int* currentTerm, int* votedFor);
 }
 
