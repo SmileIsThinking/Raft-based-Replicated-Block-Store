@@ -379,7 +379,7 @@ void send_request_votes() {
       toLeader();
 
       // new thread???
-      std::thread(send_appending_request).detach();
+      std::thread(send_appending_requests).detach();
       return;
     }
   }
@@ -444,7 +444,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   // ServerStore::append_log();
 }
 
-void send_appending_request(){
+void send_appending_requests(){
     if(role.load() != 1) {
         std::cerr << "Not a Candidate !!" << std::endl;
         return;

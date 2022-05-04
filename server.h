@@ -154,4 +154,4 @@ void toCandidate();
 void toLeader();
 
 
-void send_appending_request();
+void send_appending_requests();
