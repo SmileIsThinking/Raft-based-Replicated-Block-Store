@@ -1,2 +1,6 @@
 gen-cpp/
 *.xml
+client
+server
+.idea/
+.vscode/

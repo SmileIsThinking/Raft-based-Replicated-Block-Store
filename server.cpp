@@ -155,7 +155,7 @@ retry:
   e.term = currentTerm.load();
   e.command = 1;
   e.content = value;
-  pStates.raftLog.push_back(e);
+  raftLog.push_back(e);
   int result = ServerStore::write(addr, value, seq);
 
   // done with writing
@@ -390,7 +390,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
       ret.voteGranted = true;
       votedFor.store(requestVote.candidateId);  
       return;
-    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= raftLog.size()) {
+    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       votedFor.store(requestVote.candidateId);   
       return;  
@@ -440,7 +440,7 @@ void send_request_votes(const request_vote_args& requestVote) {
 bool check_prev_entries(int prev_term, int prev_index){
     if (prev_index == 0 && raftLog.empty()){
         return true;
-    } else if(prev_index > 0 && prev_index<=raftLog.size()){
+    } else if(prev_index > 0 && prev_index<=(int)raftLog.size()){
         if(prev_term == raftLog[prev_index-1].term){  //todo: -1 correct? based on implementation if init idx = 0, first log = 1, correct
             return true;
         }
@@ -449,7 +449,7 @@ bool check_prev_entries(int prev_term, int prev_index){
 }
 
 void append_logs(const std::vector<entry>& logs, int idx){
-    if (raftLog.size() > idx){ //todo: check index
+    if ((int)raftLog.size() > idx){ //todo: check index
         raftLog.erase(raftLog.begin() + idx, raftLog.end());
     }
     raftLog.insert(raftLog.end(), logs.begin(), logs.end());
