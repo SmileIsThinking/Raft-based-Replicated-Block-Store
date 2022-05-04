@@ -28,10 +28,10 @@ using namespace ::apache::thrift::server;
 
 
 #define HB_FREQ 5
-#define VOTE_TIMEOUT  3 // gap between different requestVote rpc
-#define TO_CANDIDATE  3 // does not receive appendEntry in timeout and convert to candidate
-time_t last_vote_sending;
-time_t last_append_receiving;
+#define ELECTION_TIMEOUT  5 // gap between different requestVote rpc
+#define APPEND_TIMEOUT  3 // does not receive appendEntry in timeout and convert to candidate
+time_t last_election;
+time_t last_append;
 
 
 std::string my_addr;
@@ -88,13 +88,14 @@ syncInfo[NODE_NUM] = {nullptr};
 
 int myID;
 
-std::atomic<int> leaderID;
-
 // 0: Leader
 // 1: Candidate
 // 2: Follower
 std::atomic<int> role;
 pthread_rwlock_t rolelock;
+std::atomic<int> leaderID;
+
+pthread_rwlock_t raftloglock;
 
 /* ===================================== */
 /* Raft States  */
@@ -118,8 +119,8 @@ pthread_rwlock_t rolelock;
 
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
-std::atomic<int> entryNum{0};
-std::vector<entry> raftLog;
+std::atomic<int> entryNum{0};  
+std::vector<entry> raftLog;  // log index starts from 1!!!
 // TODO: log vector lock?
 
 
@@ -151,4 +152,8 @@ public:
 
 void raft_rpc_init();
 void toFollower(int term);
+void toCandidate();
 void toLeader();
+
+
+void send_appending_requests();
