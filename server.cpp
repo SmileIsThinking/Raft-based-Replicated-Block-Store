@@ -458,6 +458,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
       ret.success = true;
   }
   ret.term = currentTerm;
+//  nextIndex[appendEntries.leaderId-1] =
   // todo: write to disk implementation
   // ServerStore::append_log();
 }
@@ -484,7 +485,7 @@ void send_appending_requests(){  // this is the sender
             if (curr_entry > 0){
                 curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
             } else{
-                curr_args.prevLogTerm = 0;  // todo: if term init to 0?
+                curr_args.prevLogTerm = 0;
             }
             curr_args.leaderId = myID;
             curr_args.leaderCommit = commitIndex;

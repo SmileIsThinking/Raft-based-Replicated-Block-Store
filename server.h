@@ -120,7 +120,7 @@ pthread_rwlock_t raftloglock;
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
 std::atomic<int> entryNum{0};  
-std::vector<entry> raftLog;  // log index starts from 1!!!
+std::vector<entry> raftLog;  // log index starts from 0!!!
 // TODO: log vector lock?
 
 
