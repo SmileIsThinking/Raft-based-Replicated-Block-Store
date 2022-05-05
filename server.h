@@ -28,8 +28,8 @@ using namespace ::apache::thrift::server;
 
 
 #define HB_FREQ 5
-#define ELECTION_TIMEOUT  5 // gap between different requestVote rpc
 #define APPEND_TIMEOUT  3 // does not receive appendEntry in timeout and convert to candidate
+#define ELECTION_TIMEOUT  5 // gap between different requestVote rpc
 time_t last_election;
 time_t last_append;
 
@@ -119,7 +119,7 @@ pthread_rwlock_t raftloglock;
 
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
-std::atomic<int> entryNum{0};  
+// std::atomic<int> entryNum{0};  
 std::vector<entry> raftLog;  // log index starts from 0!!!
 // TODO: log vector lock?
 

@@ -252,10 +252,23 @@ void raft_rpc_init() {
   return;
 }
 
+void append_timeout() {
+  while(1) {
+    if(currentTerm.load() != 2) {
+      break;
+    }
+    time_t curr = time(NULL);
+    if(curr - last_append > APPEND_TIMEOUT) {
+      break;
+    }
+  }
 
+  toCandidate();
+}
 
-// TODO: follower timeout
 void toFollower(int term) {
+  std:: cout << "TO FOLLOWER !!!" << std::endl;
+  time(&last_append);
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
@@ -264,11 +277,14 @@ void toFollower(int term) {
   ServerStore::write_state(term, vote);
   currentTerm.store(term);
   votedFor.store(vote); 
+  
+  std::thread(append_timeout).detach();
 
   pthread_rwlock_unlock(&rolelock);
 }
 
 void toCandidate() {
+  std:: cout << "TO CANDIDATE !!!" << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(1);
@@ -283,6 +299,7 @@ void toCandidate() {
 }
 
 void toLeader() {
+  std:: cout << "TO LEADER !!!" << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(0);
@@ -356,7 +373,6 @@ void send_request_votes() {
 
   request_vote_reply ret[NODE_NUM];
 
-  // TODO: multi-thread requests
   std::thread* requestThread = nullptr;
 
   for(int i = 0; i < NODE_NUM; i++) {
@@ -364,6 +380,7 @@ void send_request_votes() {
       ret[i].voteGranted = true;
       continue;
     }
+    ret[i].voteGranted = false;
     std::cout << "send vote request to " << i << std::endl;
     // rpcServer[i]->request_vote(ret[i], requestVote);
 
@@ -435,28 +452,34 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
-
+  
   //todo: update timer for local node
-  if(appendEntries.term > currentTerm.load()) {
-    toFollower(appendEntries.term);
-  }
+  // if(appendEntries.term > currentTerm.load()) {
+  //   toFollower(appendEntries.term);
+  // }
 
-  if(entryNum > 0){
-      printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
-  }
+  // if(entryNum > 0){
+  //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
+  // }
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
+      time(&last_append);
+      ret.term = currentTerm.load();
       ret.success = false;
-  } else{
-      // success
-      // currentTerm.store(appendEntries.term);
-      // votedFor = appendEntries.leaderId;
-      toFollower(appendEntries.term);
+      return;
+      
+  } 
 
-      append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-      commitIndex = appendEntries.leaderCommit;
-      entryNum = (int)raftLog.size();
-      ret.success = true;
-  }
+  // success
+  // currentTerm.store(appendEntries.term);
+  // votedFor = appendEntries.leaderId;
+
+  // when term >= currentTerm: toFollower
+  toFollower(appendEntries.term);
+
+  append_logs(appendEntries.entries, appendEntries.prevLogIndex);
+  commitIndex = appendEntries.leaderCommit;
+  // entryNum = (int)raftLog.size();
+  ret.success = true;
   ret.term = currentTerm;
 //  nextIndex[appendEntries.leaderId-1] =
   // todo: write to disk implementation
@@ -527,19 +550,20 @@ void start_raft_server(int id) {
 }
 
 
-void server_init(int ID) {
+void server_init() {
   pthread_rwlock_init(&rolelock, NULL);
 
   pthread_rwlock_init(&raftloglock, NULL);
 
-  /* raft init */
-  myID = ID;
+  // start storage
+  ServerStore::init(myID);
 
   leaderID.store(-1);
 
   // TODO: read from persistent store
   int term;
   toFollower(term);
+
 }
 
 int main(int argc, char** argv) {
@@ -547,54 +571,54 @@ int main(int argc, char** argv) {
     std::cout << "Usage: ./server <my_node_id> " << std::endl;
     return 1;
   }
-
-  server_init(std::atoi(argv[1]));
+  myID = std::atoi(argv[1]);
+  server_init();
 
   // raft_rpc_init();
+  // log store test
+
+  entry logEntry;
+  logEntry.command = 1;
+  logEntry.term = 2;
+  logEntry.address = 333;
+  stringGenerator(logEntry.content, BLOCK_SIZE);
+
+  std::cout << logEntry.content << std::endl;
+  int ret = ServerStore::append_log(logEntry);
 
 
 
-  is_primary.store(argc == 2);
-  printf("%s\n", is_primary ? "Primary" : "Backup");
-  int my_id = std::stoi(argv[1]);
-  my_addr = addr(my_id);
-  my_blob_port = blob_port(my_id);
-  my_pb_port = pb_port(my_id);
+  // num_write_requests.store(0);
 
-  has_backup.store(false);
-  pending_backup.store(false);
-  num_write_requests.store(0);
 
-  // start storage
-  ServerStore::init(my_id);
 
-  // start pb server in background
-  std::thread pb(start_pb_server);
+  // // start pb server in background
+  // std::thread pb(start_pb_server);
 
-  // If backup, attempt to connect to primary. We assume node 0 is primary
-  if (!is_primary.load()) {
-    int primary_id = std::stoi(argv[2]);
-    connect_to_primary(addr(primary_id), pb_port(primary_id));
-  }
+  // // If backup, attempt to connect to primary. We assume node 0 is primary
+  // if (!is_primary.load()) {
+  //   int primary_id = std::stoi(argv[2]);
+  //   connect_to_primary(addr(primary_id), pb_port(primary_id));
+  // }
 
-  // start blob server
-  std::thread blob(start_blob_server);
+  // // start blob server
+  // std::thread blob(start_blob_server);
 
-  // check for primary failure
-  if (!is_primary.load()) {
-    while (true) {
-      sleep(HB_FREQ);
-      time_t curr = time(NULL);
-      if (curr - last_heartbeat > HB_FREQ * 2) {
-        std::cout << "Primary Failure" << std::endl;
-        is_primary.store(true);
-        break;
-      }
-    }
-  }
+  // // check for primary failure
+  // if (!is_primary.load()) {
+  //   while (true) {
+  //     sleep(HB_FREQ);
+  //     time_t curr = time(NULL);
+  //     if (curr - last_heartbeat > HB_FREQ * 2) {
+  //       std::cout << "Primary Failure" << std::endl;
+  //       is_primary.store(true);
+  //       break;
+  //     }
+  //   }
+  // }
 
-  blob.join();
-  pb.join();
+  // blob.join();
+  // pb.join();
   return 0;
 }
 

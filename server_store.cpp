@@ -199,10 +199,6 @@ int ServerStore::append_log(entry& logEntry) {
     // logNum.flush();
     // std::cout << "Log num: " << num << std::endl;
     struct stat fileStat;
-    if (ret != 0) {
-        std::cout << "LOCK ERROR!" << std::endl;
-        return -1;
-    }
 
     fstat(log_num_fd, &fileStat);
     char* buf = new char[fileStat.st_size + 1];
@@ -247,6 +243,23 @@ int ServerStore::read_log(int index, entry& logEntry) {
     pthread_rwlock_unlock(&loglock);
 
     return 0;
+}
+
+// include this index, log[index] and following logs would be removed.
+int ServerStore::remove_log(int index) {
+    int ret = pthread_rwlock_wrlock(&loglock);
+    if (ret != 0) {
+        std::cout << "STATE LOCK ERROR!" << std::endl;
+        return -1;
+    }
+
+    std::string ss = std::to_string(index);
+    int len = ss.size();
+    pwrite(log_num_fd, ss.c_str(), len, 0);
+    std::cout << "log num: " << ss << std::endl;
+    // unlock
+    pthread_rwlock_unlock(&loglock);
+
 }
 
 int ServerStore::write_state(int currentTerm, int votedFor) {
