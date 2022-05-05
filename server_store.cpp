@@ -8,8 +8,8 @@
 
 int fd = -1;
 int log_fd = -1;
+int log_num_fd = -1;
 int state_fd = -1;
-
 
 int curr_seq = 0;
 
@@ -22,7 +22,14 @@ pthread_rwlock_t statelock;
 
 std::ifstream logIn;
 std::ofstream logOut;
-    
+// std::ifstream logNumIn;
+// std::ofstream logNumOut;
+
+bool is_empty(std::ifstream& pFile)
+{
+    return pFile.peek() == std::fstream::traits_type::eof();
+}
+
 int ServerStore::init(int node_id) {
     pthread_rwlock_init(&rwlock, NULL);
     mode_t mode = S_IRUSR | S_IWUSR;
@@ -46,6 +53,37 @@ int ServerStore::init(int node_id) {
     logIn.open(filename, std::ios::binary);
     logOut.open(filename, std::ios::app | std::ios::binary);
 
+
+    pthread_rwlock_init(&loglock, NULL);
+    filename = LOG_NUM + std::to_string(node_id);
+    std::cout << filename << std::endl;
+    log_num_fd = open(filename.c_str(), O_RDWR | O_CREAT, mode);
+    if (log_num_fd == -1) {
+        return -1;
+    }
+    pthread_rwlock_wrlock(&loglock);
+
+    struct stat fileStat;
+    fstat(log_num_fd, &fileStat);
+    if(fileStat.st_size == 0) {
+         std::string s = std::to_string(0);
+        int len = s.size();
+        pwrite(log_num_fd, s.c_str(), len, 0);
+    }
+    pthread_rwlock_unlock(&loglock);
+    
+    
+
+    // filename = LOG_NUM + std::to_string(node_id);
+    // std::cout << filename << std::endl;
+    // logNumOut.open(filename, std::ios::binary);
+    // logNumIn.open(filename, std::ios::binary);
+    // if(is_empty(logNumIn)) {
+    //     int num = 0;
+    //     logNumIn.seekg(0, std::ios_base::beg);
+    //     logNumIn.write(reinterpret_cast<char *>(&num), sizeof(num));   
+    //     std::cout << "LOG NUM IS CREATED!" << std::endl;
+    // }
 
 
     pthread_rwlock_init(&statelock, NULL);
@@ -152,6 +190,29 @@ int ServerStore::append_log(entry& logEntry) {
     logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
     // logOut.close();
 
+    int num = 0;
+    // logNum.seekg(0, std::ios_base::beg);
+    // logNum.read(reinterpret_cast<char *>(&num), sizeof(num));
+    // num++;
+    // logNum.seekg(0, std::ios_base::beg);
+    // logNum.write(reinterpret_cast<const char *>(&num), sizeof(num));
+    // logNum.flush();
+    // std::cout << "Log num: " << num << std::endl;
+    struct stat fileStat;
+    if (ret != 0) {
+        std::cout << "LOCK ERROR!" << std::endl;
+        return -1;
+    }
+
+    fstat(log_num_fd, &fileStat);
+    char* buf = new char[fileStat.st_size + 1];
+    pread(log_num_fd, buf, fileStat.st_size + 1, 0);
+    
+    num = atoi(buf) + 1;
+    std::string ss = std::to_string(num);
+    int len = ss.size();
+    pwrite(log_num_fd, ss.c_str(), len, 0);
+    std::cout << "log num: " << num << std::endl;
     // unlock
     pthread_rwlock_unlock(&loglock);
 
