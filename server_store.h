@@ -4,6 +4,7 @@
 #define BLOCK_SIZE 0x1000
 
 #define LOG "LOG"
+#define LOG_NUM "LOG_NUM"
 #define STATE "STATE"
 
 // const int entrySize = 4096;
