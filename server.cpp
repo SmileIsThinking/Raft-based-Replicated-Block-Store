@@ -430,6 +430,9 @@ void send_request_votes() {
   return;
 }
 
+
+
+
 bool check_prev_entries(int prev_term, int prev_index){  // ret true if sth wrong
     if (prev_index == -1 && raftLog.empty()){
         return false;
@@ -442,21 +445,27 @@ bool check_prev_entries(int prev_term, int prev_index){  // ret true if sth wron
 }
 
 void append_logs(const std::vector<entry>& logs, int idx){
-    // not idx is the appending entries' prev log index
-    if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx idx + 1
-        raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
-    }
-    // todo: check if end() starts with begin
-    raftLog.insert(raftLog.end(), logs.begin(), logs.end());
+  if(logs.empty() == true) {
+    return;
+  }
+  // not idx is the appending entries' prev log index
+  
+  // conflict 
+  if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx idx + 1
+      ServerStore::remove_log(idx + 1);
+      raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
+  }
+
+  ServerStore::append_log(logs);
+  raftLog.insert(raftLog.end(), logs.begin(), logs.end());
+}
+
+void applyToStateMachine() {
+  return;
 }
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "append entries starts" << std::endl;
-  
-  //todo: update timer for local node
-  // if(appendEntries.term > currentTerm.load()) {
-  //   toFollower(appendEntries.term);
-  // }
 
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
@@ -469,21 +478,19 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
       
   } 
 
-  // success
-  // currentTerm.store(appendEntries.term);
-  // votedFor = appendEntries.leaderId;
-
   // when term >= currentTerm: toFollower
   toFollower(appendEntries.term);
+  leaderID.store(appendEntries.leaderId);
 
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-  commitIndex = appendEntries.leaderCommit;
-  // entryNum = (int)raftLog.size();
+  if(commitIndex < appendEntries.leaderCommit){
+    commitIndex = std::min(appendEntries.leaderCommit, (int)raftLog.size()-1);
+  }
+  applyToStateMachine();
+  
   ret.success = true;
-  ret.term = currentTerm;
-//  nextIndex[appendEntries.leaderId-1] =
-  // todo: write to disk implementation
-  // ServerStore::append_log();
+  ret.term = currentTerm.load();
+  return;
 }
 
 void send_appending_requests(){  // this is the sender
@@ -584,7 +591,7 @@ int main(int argc, char** argv) {
   stringGenerator(logEntry.content, BLOCK_SIZE);
 
   std::cout << logEntry.content << std::endl;
-  int ret = ServerStore::append_log(logEntry);
+  // int ret = ServerStore::append_log(logEntry);
 
 
 
