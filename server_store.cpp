@@ -112,7 +112,7 @@ int ServerStore::read(const int64_t addr, std::string& value) {
     return 0;
 }
 
-int ServerStore::write(const int64_t addr, const std::string& value, int64_t& seq) {
+int ServerStore::write(const int64_t addr, const std::string& value) {
     std::cout << "write(" << addr << ", " << value << ")" << std::endl;
     int ret = pthread_rwlock_wrlock(&rwlock);
     if (ret != 0) {
@@ -120,7 +120,7 @@ int ServerStore::write(const int64_t addr, const std::string& value, int64_t& se
         return -1;
     }
     pwrite(fd, value.c_str(), BLOCK_SIZE, addr);
-    seq = curr_seq;
+    // seq = curr_seq;
     curr_seq ++;
     pthread_rwlock_unlock(&rwlock);
     return 0;
@@ -253,6 +253,7 @@ int ServerStore::remove_log(int index) {
     // unlock
     pthread_rwlock_unlock(&loglock);
 
+    return 0;
 }
 
 int ServerStore::write_state(int currentTerm, int votedFor) {
