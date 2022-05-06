@@ -1,6 +1,7 @@
 enum Errno {
     SUCCESS = 0,
     NOT_LEADER = 1,
+    NO_LEADER = 2,
     UNEXPECTED = 99,
 }
 
@@ -46,6 +47,19 @@ service pb_rpc {
 /* Raft RPC  */
 /* ===================================== */
 
+enum Raft_Errno {
+    SUCCESS = 0,
+    IS_LEADER = 1,
+    NOT_LEADER = 2,
+    NO_LEADER = 3,
+    UNEXPECTED = 99,
+}
+
+struct client_request_reply {
+    1: string value;
+    2: i32 err;
+}
+
 struct request_vote_args {
     1: i32 term,
     2: i32 candidateId,
@@ -83,7 +97,9 @@ struct append_entries_reply {
 
 service raft_rpc {
     void ping(),
-    PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
+
+    // new request from a client
+    client_request_reply new_request(1:entry raftEntry, 2:i32 seq),
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
 }
