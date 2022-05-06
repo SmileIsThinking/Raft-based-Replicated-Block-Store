@@ -37,8 +37,8 @@ PB_Errno::type raft_rpcHandler::update(const int64_t addr, const std::string& va
   }
   // Wait for previous updates to complete
   while (curr_seq.load() != seq);
-  int64_t tmp;
-  int result = ServerStore::write(addr, value, tmp);
+  // int64_t tmp;
+  int result = ServerStore::write(addr, value);
   // let subsequent requests run
   curr_seq.fetch_add(1, std::memory_order_acq_rel);
   // TODO: handle write failures
@@ -75,7 +75,7 @@ retry:
   e.command = 1;
   e.content = value;
   raftLog.push_back(e);
-  int result = ServerStore::write(addr, value, seq);
+  int result = ServerStore::write(addr, value);
 
   // done with writing
   num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
@@ -461,6 +461,13 @@ void append_logs(const std::vector<entry>& logs, int idx){
 }
 
 void applyToStateMachine() {
+  while (commitIndex > lastApplied){
+    int newApplied = lastApplied + 1;
+    if (raftLog[lastApplied].command == 1){
+      ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
+    }
+    lastApplied++;
+  }
   return;
 }
 
@@ -493,6 +500,11 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   return;
 }
 
+void send_appending(int ID, append_entries_reply& ret, const append_entries_args& appendEntry) {
+  rpcServer[ID]->append_entries(ret, appendEntry);
+  return;
+}
+
 void send_appending_requests(){  // this is the sender
     // todo: add multi threaded implementation
     if(role.load() != 1) {
@@ -500,17 +512,25 @@ void send_appending_requests(){  // this is the sender
         return;
     }
     int ack_success = 0;  // need to be concurrent one with load/fetch_add
+
+    std::thread* appendThread = nullptr;
+
+    append_entries_args curr_args;
+    append_entries_reply curr_ret;
+
     for (int i = 0; i < NODE_NUM; i++) {
         if(i == myID) {
             continue;
         }
         // for each server, need to lock the raftlog
-        // todo: check the index correctness
+        // TODO: check the index correctness
         int curr_entry = (int)raftLog.size() - 1;  // note the index starts from zero nextIndex[] ???
-        append_entries_args curr_args;
+        
         curr_args.term = currentTerm.load();
+
+        
         while(curr_entry >= 0){
-            append_entries_reply curr_ret;
+            
             curr_args.prevLogIndex = curr_entry - 1;
             if (curr_entry > 0){
                 curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
@@ -522,6 +542,8 @@ void send_appending_requests(){  // this is the sender
             curr_args.entries = {raftLog.begin() + curr_entry, raftLog.end()};
             //
             rpcServer[i]->append_entries(curr_ret, curr_args);
+            // appendThread = new std::thread(send_appending, i, curr_ret, curr_args);
+            // appendThread->detach();
             if (curr_ret.success){
                 ack_success++;
                 break;
@@ -567,8 +589,9 @@ void server_init() {
 
   leaderID.store(-1);
 
-  // TODO: read from persistent store
-  int term;
+  int term = 0, vote = 0;
+  ServerStore::read_state(&term, &vote);
+
   toFollower(term);
 
 }
