@@ -27,9 +27,9 @@ using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::server;
 
 
-#define HB_FREQ 5
 #define APPEND_TIMEOUT  3 // does not receive appendEntry in timeout and convert to candidate
 #define ELECTION_TIMEOUT  5 // gap between different requestVote rpc
+#define HB_FREQ 1 // The frequency of sending appendEntries RPC in leader
 time_t last_election;
 time_t last_append;
 
@@ -144,7 +144,7 @@ public:
     void ping() {
         printf("%n: raft ping n", &myID);
     }
-    PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
+    void new_request(client_request_reply& ret, const entry& raftEntry, const int32_t seq);
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };
