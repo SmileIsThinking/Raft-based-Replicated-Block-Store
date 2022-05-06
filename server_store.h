@@ -16,7 +16,7 @@ namespace ServerStore {
     int full_read(std::string& content);
     int full_write(std::string& content);
 
-    int append_log(entry& logEntry);
+    int append_log(const std::vector<entry>& logEntries);
     int read_log(int index, entry& logEntry);
     int remove_log(int index);
     int write_state(int currentTerm, int votedFor);
