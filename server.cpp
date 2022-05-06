@@ -248,6 +248,7 @@ retry:
 }
 
 // deal with two cases: read and write!
+// TODO 
 void raft_rpcHandler::new_request(client_request_reply& ret, \
                       const entry& raftEntry, const int32_t seq){
   static std::atomic<int64_t> curr_seq(0);
@@ -262,6 +263,24 @@ void raft_rpcHandler::new_request(client_request_reply& ret, \
   int result = ServerStore::write(raftEntry.address, raftEntry.content);
   // let subsequent requests run
   curr_seq.fetch_add(1, std::memory_order_acq_rel);
+
+  std::vector<entry> tmpLog;
+  tmpLog.emplace_back(raftEntry);
+  ServerStore::append_log(tmpLog);
+
+  pthread_rwlock_wrlock(&raftloglock);
+  raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
+  int index = raftLog.size() - 1;
+  pthread_rwlock_unlock(&raftloglock);
+  nextIndex[myID] = index + 1;
+  matchIndex[myID] = index;
+  
+  // if(raftEntry.command == 1) {
+  //   // 写log
+
+    // ServerStore::append_log
+    
+  // }
   // TODO: handle write failures
   // if (result == 0)
   //   return Raft_Errno::SUCCESS;
@@ -343,8 +362,14 @@ void toLeader() {
 
   pthread_rwlock_unlock(&raftloglock);
   for(int i = 0; i < NODE_NUM; i++) {
-    nextIndex[i] = index + 1;
-    matchIndex[i] = 0;
+    if(i == myID) {
+      nextIndex[i] = index + 1;
+      matchIndex[i] = index;
+    }else {
+      nextIndex[i] = index + 1;
+      matchIndex[i] = 0;
+    }
+
   }
 
   std::thread(leaderHeartbeat).detach();
@@ -412,8 +437,10 @@ void send_request_votes() {
     if(i == myID) {
       ret[i].voteGranted = true;
       continue;
+    }else {
+      ret[i].voteGranted = false;
     }
-    ret[i].voteGranted = false;
+    
     std::cout << "send vote request to " << i << std::endl;
     // rpcServer[i]->request_vote(ret[i], requestVote);
 
@@ -464,9 +491,8 @@ void send_request_votes() {
 }
 
 
-
-
-bool check_prev_entries(int prev_term, int prev_index){  // ret true if sth wrong
+// ret true if sth wrong
+bool check_prev_entries(int prev_term, int prev_index){  
     if (prev_index == -1 && raftLog.empty()){
         return false;
     } else if(prev_index >= 0 && prev_index<=(int)raftLog.size()-1){
@@ -477,6 +503,7 @@ bool check_prev_entries(int prev_term, int prev_index){  // ret true if sth wron
     return true;
 }
 
+// ALERT: idx == -1 if the log is emtpy. But, it's ok in this implementation.
 void append_logs(const std::vector<entry>& logs, int idx){
   if(logs.empty() == true) {
     return;
@@ -490,7 +517,10 @@ void append_logs(const std::vector<entry>& logs, int idx){
   }
 
   ServerStore::append_log(logs);
+
+  pthread_rwlock_wrlock(&raftloglock);
   raftLog.insert(raftLog.end(), logs.begin(), logs.end());
+  pthread_rwlock_unlock(&raftloglock);
 }
 
 void applyToStateMachine() {
@@ -513,10 +543,12 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       time(&last_append);
       ret.term = currentTerm.load();
-      ret.success = false;
+      ret.success = 0;
       return;
-      
   } 
+
+
+  // if()
 
   // when term >= currentTerm: toFollower
   toFollower(appendEntries.term);
@@ -528,13 +560,13 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   }
   applyToStateMachine();
   
-  ret.success = true;
+  ret.success = 1;
   ret.term = currentTerm.load();
   return;
 }
 
-void send_appending(int ID, append_entries_reply& ret, const append_entries_args& appendEntry) {
-  rpcServer[ID]->append_entries(ret, appendEntry);
+void send_appending(int ID, append_entries_reply* ret, const append_entries_args* appendEntry) {
+  rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
   return;
 }
 
@@ -545,8 +577,6 @@ void send_appending_requests(){  // this is the sender
         return;
     }
 
-    int ack_success = 0;  // need to be concurrent one with load/fetch_add
-
     std::thread* appendThread = nullptr;
     append_entries_args preEntry;
     preEntry.term = currentTerm.load();
@@ -554,8 +584,11 @@ void send_appending_requests(){  // this is the sender
     preEntry.leaderCommit = commitIndex;    
     preEntry.entries = std::vector<entry>();
     append_entries_args appendEntry[NODE_NUM] = {preEntry};
-    append_entries_reply ret[NODE_NUM];
 
+    append_entries_reply preRet;
+    preRet.success = -1;
+    append_entries_reply ret[NODE_NUM] = {preRet};
+    
     pthread_rwlock_rdlock(&raftloglock);
     int lastIndex = raftLog.size() - 1;
     pthread_rwlock_unlock(&raftloglock);
@@ -566,52 +599,79 @@ void send_appending_requests(){  // this is the sender
       }
       
       if(lastIndex >= nextIndex[i]) {
-        
+        appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
       }
+      appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 
-
-      rpcServer[i]->append_entries(ret[i], appendEntry[i]);
+      // ALERT: stack overflow
+      if (appendEntry[i].prevLogIndex < 0) {
+        // no log yet! be cautious of stack overflow (log[-1])
+        appendEntry[i].prevLogTerm = currentTerm.load();
+      } else {
+        appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
+      }
+      
+      appendThread = new std::thread(send_appending, i, ret, appendEntry);
+      appendThread->detach();
     }
 
-    // check return, then apply to state machine if valid
+    
+    int ack_num = 0;  // TODO: think about it, concurrentlly add one with load/fetch_add
+    while(1) {
+      if(role.load() != 0) {
+        std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+        return;
+      }
 
-    // for (int i = 0; i < NODE_NUM; i++) {
-    //     if(i == myID) {
-    //         continue;
-    //     }
-    //     // for each server, need to lock the raftlog
-    //     // TODO: check the index correctness
-    //     int curr_entry = (int)raftLog.size() - 1;  // note the index starts from zero nextIndex[] ???
-        
-    //     curr_args.term = currentTerm.load();
+      for(int i = 0; i < NODE_NUM; i++) {
+        if(ack_num == NODE_NUM - 1) {
+          break;
+        }
+        if(ret[i].success == 1) {
+          if(currentTerm.load() < ret[i].term) {
+            toFollower(ret[i].term);
+            return;
+          }
+          ack_num++;
 
-        
-    //     while(curr_entry >= 0){
-            
-    //         curr_args.prevLogIndex = curr_entry - 1;
-    //         if (curr_entry > 0){
-    //             curr_args.prevLogTerm = raftLog[curr_args.prevLogIndex].term;
-    //         } else{
-    //             curr_args.prevLogTerm = 0;
-    //         }
-    //         curr_args.leaderId = myID;
-    //         curr_args.leaderCommit = commitIndex;
-    //         curr_args.entries = {raftLog.begin() + curr_entry, raftLog.end()};
-    //         //
-    //         rpcServer[i]->append_entries(curr_ret, curr_args);
-    //         // appendThread = new std::thread(send_appending, i, curr_ret, curr_args);
-    //         // appendThread->detach();
-    //         if (curr_ret.success){
-    //             ack_success++;
-    //             break;
-    //         }
-    //         if(curr_ret.term > currentTerm.load()){
-    //             // todo: ??? what happened ??? I am not leader???
-    //         }
-    //         //
-    //         curr_entry--;
-    //     }
-    // }
+          nextIndex[i] = lastIndex + 1;
+          matchIndex[i] = nextIndex[i] - 1;      
+        }else if(ret[i].success == 0) {
+          if(currentTerm.load() < ret[i].term) {
+            toFollower(ret[i].term);
+            return;
+          }
+          ack_num++;
+
+          nextIndex[i] = nextIndex[i] - 1;
+        }
+      }
+    }
+
+    int N = commitIndex;
+    while(1) {
+      N++;
+      if(N > lastIndex) {
+        break;
+      }
+      int count = 0;
+
+      for(int i = 0; i < NODE_NUM; i++) {
+        if(matchIndex[i] >= N) {
+          count++;
+        }
+      }
+
+      if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
+        commitIndex = N;
+      }else {
+        break;
+      }
+    }
+
+    applyToStateMachine();
+
+    return;
 }
 
 void start_raft_server(int id) {

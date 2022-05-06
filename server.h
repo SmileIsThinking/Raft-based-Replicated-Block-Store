@@ -155,5 +155,5 @@ void toFollower(int term);
 void toCandidate();
 void toLeader();
 
-
+void send_request_votes();
 void send_appending_requests();
