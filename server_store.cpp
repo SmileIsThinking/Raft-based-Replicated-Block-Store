@@ -169,12 +169,8 @@ int ServerStore::full_write(std::string& content) {
 /* Raft States Update */
 /* ===================================== */
 
-int ServerStore::append_log(entry& logEntry) {
+int ServerStore::append_log(const std::vector<entry>& logEntries) {
     std::string s(BLOCK_SIZE, ' ');
-    if(logEntry.command == 0) {
-        logEntry.content = s;
-    }
-    std::cout << "size: " << sizeof(logEntry) << std::endl;
 
     // lock
     int ret = pthread_rwlock_wrlock(&loglock);
@@ -182,33 +178,32 @@ int ServerStore::append_log(entry& logEntry) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
         return -1;
     }
-    
-    logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
-    logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
-    std::cout << sizeof(logEntry.address) << std::endl;
-    logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));
-    logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
-    // logOut.close();
+
+    for(auto logEntry: logEntries) {
+        logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
+        logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
+        std::cout << sizeof(logEntry.address) << std::endl;
+        logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));\
+        if (logEntry.command == 0)  {
+            logOut.write(s.c_str(), BLOCK_SIZE);
+        }else {
+            // logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
+        }
+    }
 
     int num = 0;
-    // logNum.seekg(0, std::ios_base::beg);
-    // logNum.read(reinterpret_cast<char *>(&num), sizeof(num));
-    // num++;
-    // logNum.seekg(0, std::ios_base::beg);
-    // logNum.write(reinterpret_cast<const char *>(&num), sizeof(num));
-    // logNum.flush();
-    // std::cout << "Log num: " << num << std::endl;
     struct stat fileStat;
 
     fstat(log_num_fd, &fileStat);
     char* buf = new char[fileStat.st_size + 1];
     pread(log_num_fd, buf, fileStat.st_size + 1, 0);
     
-    num = atoi(buf) + 1;
+    num = atoi(buf) + logEntries.size();
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
     std::cout << "log num: " << num << std::endl;
+
     // unlock
     pthread_rwlock_unlock(&loglock);
 
@@ -224,9 +219,7 @@ int ServerStore::read_log(int index, entry& logEntry) {
         return -1;
     }
 
-    // std::ifstream logIn;
 
-    // logIn.open(LOG, std::ios::binary);
     logIn.seekg(index * entrySize, std::ios_base::beg);
     logIn.read(reinterpret_cast<char *>(&logEntry.command), sizeof(logEntry.command));
     logIn.read(reinterpret_cast<char *>(&logEntry.term), sizeof(logEntry.term));
