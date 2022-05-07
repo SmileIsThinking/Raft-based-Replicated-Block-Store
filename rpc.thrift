@@ -5,21 +5,21 @@ enum Errno {
     UNEXPECTED = 99,
 }
 
-struct read_ret {
+struct request_ret {
     1: Errno rc,
     2: string value,
     3: i32 node_id,
 }
 
-struct write_ret {
-    1: Errno rc,
-    2: i32 node_id,
-}
+# struct write_ret {
+#     1: Errno rc,
+#     2: i32 node_id,
+# }
 
 service blob_rpc {
     void ping(),
-    read_ret read(1:i64 addr),
-    write_ret write(1:i64 addr, 2:string value),
+    request_ret read(1:i64 addr),
+    request_ret write(1:i64 addr, 2:string value),
 }
 
 enum PB_Errno {

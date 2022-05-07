@@ -7,7 +7,6 @@
 #define LOG_NUM "LOG_NUM"
 #define STATE "STATE"
 
-// const int entrySize = 4096;
 namespace ServerStore {
 
     int init(int node_id);
@@ -17,7 +16,10 @@ namespace ServerStore {
     int full_write(std::string& content);
 
     int append_log(const std::vector<entry>& logEntries);
-    int read_log(int index, entry& logEntry);
+    int read_log_num();
+    entry read_log(int index);
+    std::vector<entry> read_full_log();
+
     int remove_log(int index);
     int write_state(int currentTerm, int votedFor);
     int read_state(int* currentTerm, int* votedFor);

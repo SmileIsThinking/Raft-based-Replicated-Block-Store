@@ -71,20 +71,6 @@ int ServerStore::init(int node_id) {
         pwrite(log_num_fd, s.c_str(), len, 0);
     }
     pthread_rwlock_unlock(&loglock);
-    
-    
-
-    // filename = LOG_NUM + std::to_string(node_id);
-    // std::cout << filename << std::endl;
-    // logNumOut.open(filename, std::ios::binary);
-    // logNumIn.open(filename, std::ios::binary);
-    // if(is_empty(logNumIn)) {
-    //     int num = 0;
-    //     logNumIn.seekg(0, std::ios_base::beg);
-    //     logNumIn.write(reinterpret_cast<char *>(&num), sizeof(num));   
-    //     std::cout << "LOG NUM IS CREATED!" << std::endl;
-    // }
-
 
     pthread_rwlock_init(&statelock, NULL);
     filename = STATE + std::to_string(node_id);
@@ -170,6 +156,10 @@ int ServerStore::full_write(std::string& content) {
 /* ===================================== */
 
 int ServerStore::append_log(const std::vector<entry>& logEntries) {
+    if(logEntries.empty() == true) {
+        std::cout << "ERROR: Entry Vector is EMPTY!!!" << std::endl;
+        return -1;
+    }
     std::string s(BLOCK_SIZE, ' ');
 
     // lock
@@ -182,27 +172,20 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     for(auto logEntry: logEntries) {
         logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
         logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
-        std::cout << sizeof(logEntry.address) << std::endl;
         logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));\
         if (logEntry.command == 0)  {
             logOut.write(s.c_str(), BLOCK_SIZE);
         }else {
-            // logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
+            logOut.write(logEntry.content.c_str(), BLOCK_SIZE);
         }
     }
-
-    int num = 0;
-    struct stat fileStat;
-
-    fstat(log_num_fd, &fileStat);
-    char* buf = new char[fileStat.st_size + 1];
-    pread(log_num_fd, buf, fileStat.st_size + 1, 0);
     
-    num = atoi(buf) + logEntries.size();
+    // IMPORTANT: keep consistency
+    // write log entry first, log num second
+    int num = read_log_num() + logEntries.size();
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
-    std::cout << "log num: " << num << std::endl;
 
     // unlock
     pthread_rwlock_unlock(&loglock);
@@ -210,16 +193,19 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     return 0;
 }
 
-int ServerStore::read_log(int index, entry& logEntry) {
-
+entry ServerStore::read_log(int index) {
+    if(index < 0) {
+        std::cout << "Invalid index" << std::endl;
+    }
     // lock
+    entry logEntry;
     int ret = pthread_rwlock_rdlock(&loglock);
     if (ret != 0) {
-        std::cout << "LOCK ERROR!" << std::endl;
-        return -1;
+        std::cout << "LOCK ERROR! return empty entry" << std::endl;
+        return logEntry;
     }
 
-
+    
     logIn.seekg(index * entrySize, std::ios_base::beg);
     logIn.read(reinterpret_cast<char *>(&logEntry.command), sizeof(logEntry.command));
     logIn.read(reinterpret_cast<char *>(&logEntry.term), sizeof(logEntry.term));
@@ -227,7 +213,6 @@ int ServerStore::read_log(int index, entry& logEntry) {
     char c[BLOCK_SIZE];
     logIn.read(c, BLOCK_SIZE);
     std::string s(c);
-    std::cout << s << std::endl;
     logEntry.content = s;
 
     // logIn.close();
@@ -235,7 +220,25 @@ int ServerStore::read_log(int index, entry& logEntry) {
     //unlock
     pthread_rwlock_unlock(&loglock);
 
-    return 0;
+    return logEntry;
+}
+
+int ServerStore::read_log_num() {
+    struct stat fileStat;
+
+    fstat(log_num_fd, &fileStat);
+    char* buf = new char[fileStat.st_size + 1];
+    pread(log_num_fd, buf, fileStat.st_size + 1, 0);  
+    return atoi(buf);  
+}
+
+std::vector<entry> ServerStore::read_full_log() {
+    int log_num = read_log_num();
+    std::vector<entry> logEntries;
+    for(int i = 0; i < log_num; i++) {
+        logEntries.emplace_back(read_log(i));
+    }
+    return logEntries;
 }
 
 // include this index, log[index] and following logs would be removed.

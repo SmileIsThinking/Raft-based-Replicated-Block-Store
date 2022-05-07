@@ -27,7 +27,7 @@ void BlockStore::conn_init(const std::string& hostname, const int port) {
 Errno::type BlockStore::read(const int64_t address, std::string& value, int retry_time, int sleep_time) { //
     int try_time = 0;
     std::string read_str;
-    read_ret ret_res;
+    request_ret ret_res;
 
     while(try_time < retry_time){
         try_time++;
@@ -55,7 +55,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
 Errno::type BlockStore::write(const int64_t address, std::string& write, int retry_time, int sleep_time) {
     std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
-    write_ret ret_res;
+    request_ret ret_res;
     while(tries > 0){
         tries--;
         try{

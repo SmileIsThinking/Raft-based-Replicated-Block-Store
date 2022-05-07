@@ -156,14 +156,18 @@ void raft_rpc_init() {
   return;
 }
 
-void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
+// TODO: seq num
+void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // not a leader
   // TODO: what if currently there is no leader
+
+  // TODO: hangout
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
     _return.rc = Errno::NO_LEADER;
     return;
   }
+
   if (role.load() != 0) {
     std::cerr << "read: Not a leader" << std::endl;
     _return.rc = Errno::NOT_LEADER;
@@ -171,19 +175,60 @@ void blob_rpcHandler::read(read_ret& _return, const int64_t addr) {
     return;
   }
 
-  
-  // if (ServerStore::read(addr, _return.value) == 0) {
-  //   _return.rc = Errno::SUCCESS;
-  //   return;
-  // }
+  entry raftEntry;
+  raftEntry.command = 0;
+  raftEntry.address = addr;
+  raftEntry.term = currentTerm.load();
 
-  _return.rc = Errno::UNEXPECTED;
+  new_request(_return, raftEntry);
+  return;
+
+  // _return.rc = Errno::UNEXPECTED;
+  // return;
+}
+
+void new_request(request_ret& _return, entry e) {
+  std::vector<entry> tmpLog;
+  tmpLog.emplace_back(e);
+  ServerStore::append_log(tmpLog);
+
+  pthread_rwlock_wrlock(&raftloglock);
+  raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
+  int reqIndex = raftLog.size() - 1;
+
+  nextIndex[myID] = reqIndex + 1;
+  matchIndex[myID] = reqIndex;  
+  pthread_rwlock_unlock(&raftloglock);
+
+  std::string value;
+  while(1) {
+    if(commitIndex >= reqIndex) {
+      if(lastApplied == reqIndex - 1){
+        if(e.command == 0) {
+          ServerStore::read(e.address, _return.value);
+        }else if(e.command == 1) {
+          ServerStore::write(e.address, e.content);
+        }
+        _return.rc = Errno::SUCCESS;
+        lastApplied++;
+        return;        
+      }
+    }
+  }
+}
+
+void applyToStateMachine() {
+  while (commitIndex > lastApplied){
+    int newApplied = lastApplied + 1;
+    if (raftLog[lastApplied].command == 1){
+      ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
+    }
+    lastApplied++;
+  }
   return;
 }
 
-
-
-void blob_rpcHandler::write(write_ret& _return, const int64_t addr, const std::string& value) {
+void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std::string& value) {
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
     _return.rc = Errno::NO_LEADER;
@@ -194,56 +239,60 @@ void blob_rpcHandler::write(write_ret& _return, const int64_t addr, const std::s
     std::cerr << "write: Not a leader" << std::endl;
     _return.rc = Errno::NOT_LEADER;
     _return.node_id = leaderID.load();
-    return ;
-  }
-
-retry:
-
-  // creating a copy to followers, block write requests
-  while (pending_candidate.load());
-  // exist write requests, block whole file read for creating new backups
-  num_write_requests.fetch_add(1, std::memory_order_acq_rel);
-  // in case of race condition
-  if (pending_candidate.load()) {
-    num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-    goto retry;
-  }
-
-  int64_t seq;
-  entry e;
-  e.term = currentTerm.load();
-  e.command = 1;
-  e.content = value;
-  raftLog.push_back(e);
-  int result = ServerStore::write(addr, value);
-
-  // done with writing
-  num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-
-  if (result != 0){
-    _return.rc = Errno::UNEXPECTED;
-    return ;
-  }
-    
-  // TODO : write request
-  for(int i = 0; i < NODE_NUM; i++) {
-    if(i == myID) {
-      continue;
-    }
-    std::cout << "send write value to replicas " << i << std::endl;
-    // PB_Errno::type reply = rpcServer[i]->update(addr, value, seq);
-    // if (reply == PB_Errno::SUCCESS){
-    //   _return.rc = Errno::SUCCESS;
-    //   return ;
-    // }
-    // else{
-    //   _return.rc = Errno::UNEXPECTED;
-    //   return ;
-    // }
     return;
-      // should not happen
-      
   }
+
+  entry raftEntry;
+  raftEntry.command = 1;
+  raftEntry.address = addr;
+  raftEntry.content = value;
+  raftEntry.term = currentTerm.load();
+
+  new_request(_return, raftEntry);
+  return;  
+
+// retry:
+
+//   // creating a copy to followers, block write requests
+//   while (pending_candidate.load());
+//   // exist write requests, block whole file read for creating new backups
+//   num_write_requests.fetch_add(1, std::memory_order_acq_rel);
+//   // in case of race condition
+//   if (pending_candidate.load()) {
+//     num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+//     goto retry;
+//   }
+
+//   int64_t seq;
+//   int result = ServerStore::write(addr, value);
+
+//   // done with writing
+//   num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+
+//   if (result != 0){
+//     _return.rc = Errno::UNEXPECTED;
+//     return ;
+//   }
+    
+//   // TODO : write request
+//   for(int i = 0; i < NODE_NUM; i++) {
+//     if(i == myID) {
+//       continue;
+//     }
+//     std::cout << "send write value to replicas " << i << std::endl;
+//     // PB_Errno::type reply = rpcServer[i]->update(addr, value, seq);
+//     // if (reply == PB_Errno::SUCCESS){
+//     //   _return.rc = Errno::SUCCESS;
+//     //   return ;
+//     // }
+//     // else{
+//     //   _return.rc = Errno::UNEXPECTED;
+//     //   return ;
+//     // }
+//     return;
+//       // should not happen
+      
+//   }
   
 }
 
@@ -376,7 +425,7 @@ void toLeader() {
 }
 
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
-  std::cout << "get vote request" << std::endl;
+  std::cout << "Receive Reuqest Vote RPC" << std::endl;
 
   if(requestVote.term < currentTerm.load()) {
     ret.voteGranted = false;
@@ -419,6 +468,7 @@ void send_request_votes() {
     return;
   }
 
+  std::cout << "Send Request Votes to others!" << std::endl;
   // requestVote init
   request_vote_args requestVote;
   requestVote.term = currentTerm.load();
@@ -523,19 +573,10 @@ void append_logs(const std::vector<entry>& logs, int idx){
   pthread_rwlock_unlock(&raftloglock);
 }
 
-void applyToStateMachine() {
-  while (commitIndex > lastApplied){
-    int newApplied = lastApplied + 1;
-    if (raftLog[lastApplied].command == 1){
-      ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
-    }
-    lastApplied++;
-  }
-  return;
-}
+
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
-  std::cout << "append entries starts" << std::endl;
+  std::cout << "Receive Append Entries RPC" << std::endl;
 
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
@@ -558,7 +599,6 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   if(commitIndex < appendEntries.leaderCommit){
     commitIndex = std::min(appendEntries.leaderCommit, (int)raftLog.size()-1);
   }
-  applyToStateMachine();
   
   ret.success = 1;
   ret.term = currentTerm.load();
@@ -570,12 +610,13 @@ void send_appending(int ID, append_entries_reply* ret, const append_entries_args
   return;
 }
 
-void send_appending_requests(){  // this is the sender
-    // todo: add multi threaded implementation
+void send_appending_requests(){  
     if(role.load() != 0) {
         std::cerr << "Not a Leader !!" << std::endl;
         return;
     }
+
+    std::cout << "Send Request Votes to others!" << std::endl;
 
     std::thread* appendThread = nullptr;
     append_entries_args preEntry;
@@ -669,14 +710,12 @@ void send_appending_requests(){  // this is the sender
       }
     }
 
-    applyToStateMachine();
-
     return;
 }
 
 void start_raft_server(int id) {
   if(id < 0 || id > 2) {
-    std::cout << "unknown id" << std::endl;
+    std::cout << "Unknown ID" << std::endl;
     return;
   }
   std::cout << "Starting Raft Server at " << raftPort[id] << std::endl;
@@ -697,21 +736,27 @@ void start_raft_server(int id) {
 
 
 void server_init() {
-  pthread_rwlock_init(&rolelock, NULL);
 
+  pthread_rwlock_init(&rolelock, NULL);
   pthread_rwlock_init(&raftloglock, NULL);
 
   // start storage
   ServerStore::init(myID);
-
   leaderID.store(-1);
 
   int term = 0, vote = 0;
   ServerStore::read_state(&term, &vote);
-
-  toFollower(term);
+  raftLog = ServerStore::read_full_log();
+  
+  for(int i = 0; i < (int)raftLog.size(); i++) {
+    std::cout << "Index:  " << i << std::endl;
+    entry_format_print(raftLog[i]);
+  }
+  // toFollower(term);
 
 }
+
+
 
 int main(int argc, char** argv) {
   if (argc != 2) {
@@ -724,14 +769,22 @@ int main(int argc, char** argv) {
   // raft_rpc_init();
   // log store test
 
+  std::vector<entry> logEntries;
   entry logEntry;
   logEntry.command = 1;
   logEntry.term = 2;
   logEntry.address = 333;
   stringGenerator(logEntry.content, BLOCK_SIZE);
 
-  std::cout << logEntry.content << std::endl;
-  // int ret = ServerStore::append_log(logEntry);
+  logEntries.emplace_back(logEntry);
+
+  entry_format_print(logEntry);
+  // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
+  int ret = ServerStore::append_log(logEntries);
+
+  logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
+  std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
+  entry_format_print(logEntry);
 
 
 
@@ -769,3 +822,11 @@ int main(int argc, char** argv) {
   return 0;
 }
 
+void entry_format_print(entry logEntry) {
+  std::cout << "========================" << std::endl;
+  std::cout << "Command: " << logEntry.command << std::endl;
+  std::cout << "Term: " << logEntry.term << std::endl;
+  std::cout << "Address: " << logEntry.address << std::endl;
+  std::cout << "Content: " << logEntry.content << std::endl;
+  std::cout << "========================" << std::endl;
+}
