@@ -296,54 +296,16 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
   
 }
 
-// deal with two cases: read and write!
-// TODO 
-void raft_rpcHandler::new_request(client_request_reply& ret, \
-                      const entry& raftEntry, const int32_t seq){
-  static std::atomic<int64_t> curr_seq(0);
-
-  // if (role.load() == 0) {
-  //   std::cerr << "update: is a leader" << std::endl;
-  //   return Raft_Errno::IS_LEADER;
-  // }
-  // Wait for previous updates to complete
-  while (curr_seq.load() != seq);
-  // int64_t tmp;
-  int result = ServerStore::write(raftEntry.address, raftEntry.content);
-  // let subsequent requests run
-  curr_seq.fetch_add(1, std::memory_order_acq_rel);
-
-  std::vector<entry> tmpLog;
-  tmpLog.emplace_back(raftEntry);
-  ServerStore::append_log(tmpLog);
-
-  pthread_rwlock_wrlock(&raftloglock);
-  raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
-  int index = raftLog.size() - 1;
-  pthread_rwlock_unlock(&raftloglock);
-  nextIndex[myID] = index + 1;
-  matchIndex[myID] = index;
-  
-  // if(raftEntry.command == 1) {
-  //   // 写log
-
-    // ServerStore::append_log
-    
-  // }
-  // TODO: handle write failures
-  // if (result == 0)
-  //   return Raft_Errno::SUCCESS;
-  // else
-  //   // Backup fail to make copy, crash to avoid inconsistency
-  //   exit(1);
-}
-
 void appendTimeout() {
+  std::cout << "append timeout" << std::endl;
+  std::cout << "role: " << role.load() << std::endl;
   while(1) {
-    if(currentTerm.load() != 2) {
+    
+    if(role.load() != 2) {
       break;
     }
     time_t curr = time(NULL);
+    std::cout << "curr time: " << curr << std::endl;
     if(curr - last_append > APPEND_TIMEOUT) {
       break;
     }
@@ -355,15 +317,15 @@ void appendTimeout() {
 void toFollower(int term) {
   std:: cout << "TO FOLLOWER !!!" << std::endl;
   time(&last_append);
+  std::cout << "last append: " << last_append << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
   int vote = -1;
-
   ServerStore::write_state(term, vote);
   currentTerm.store(term);
   votedFor.store(vote); 
-  
+
   std::thread(appendTimeout).detach();
 
   pthread_rwlock_unlock(&rolelock);
@@ -752,7 +714,7 @@ void server_init() {
     std::cout << "Index:  " << i << std::endl;
     entry_format_print(raftLog[i]);
   }
-  // toFollower(term);
+  toFollower(term);
 
 }
 
@@ -766,25 +728,31 @@ int main(int argc, char** argv) {
   myID = std::atoi(argv[1]);
   server_init();
 
+
+  // sleep(10);
+  // std::string t;
+  std::cout << "Input terminate if you want to terminate" << std::endl;
+  std::cin.ignore();
+
   // raft_rpc_init();
   // log store test
 
-  std::vector<entry> logEntries;
-  entry logEntry;
-  logEntry.command = 1;
-  logEntry.term = 2;
-  logEntry.address = 333;
-  stringGenerator(logEntry.content, BLOCK_SIZE);
+  // std::vector<entry> logEntries;
+  // entry logEntry;
+  // logEntry.command = 1;
+  // logEntry.term = 2;
+  // logEntry.address = 333;
+  // stringGenerator(logEntry.content, BLOCK_SIZE);
 
-  logEntries.emplace_back(logEntry);
+  // logEntries.emplace_back(logEntry);
 
-  entry_format_print(logEntry);
-  // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
-  int ret = ServerStore::append_log(logEntries);
+  // entry_format_print(logEntry);
+  // // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
+  // ServerStore::append_log(logEntries);
 
-  logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
-  std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
-  entry_format_print(logEntry);
+  // logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
+  // std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
+  // entry_format_print(logEntry);
 
 
 

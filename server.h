@@ -144,7 +144,6 @@ public:
     void ping() {
         printf("%n: raft ping n", &myID);
     }
-    void new_request(client_request_reply& ret, const entry& raftEntry, const int32_t seq);
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };

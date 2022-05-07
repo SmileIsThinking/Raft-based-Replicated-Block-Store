@@ -266,13 +266,10 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
         return -1;
     }
-    std::cout << "lock ends" << std::endl;
+    // std::cout << "lock ends" << std::endl;
     std::string s = std::to_string(currentTerm) + " " + std::to_string(votedFor);
-    // lseek(state_fd, 0, SEEK_SET);
-    std::cout << "stuck " << std::endl;
     int len = s.size();
     pwrite(state_fd, s.c_str(), len, 0);
-    std::cout << "stuck " << std::endl;
     pthread_rwlock_unlock(&statelock);
 
     return 0;
