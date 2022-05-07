@@ -681,6 +681,20 @@ void send_appending_requests(){
     return;
 }
 
+void raft_rpcHandler::ping(int other) {
+  try {
+    std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[other], raftPort[other]));
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+    syncInfo[other] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+    rpcServer[other] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[other]);
+    transport->open();
+    std::cout << "ping success" << std::endl;
+  } catch (apache::thrift::transport::TTransportException) {
+    std::cout << "ping fail" << std::endl;
+  }
+  return;
+}
 
 void start_raft_server(int id) {
   if(id < 0 || id > 2) {
@@ -704,6 +718,9 @@ void start_raft_server(int id) {
 
 void raft_rpc_init() {
   for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
     try {
       std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[i], raftPort[i]));
       std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
@@ -711,7 +728,7 @@ void raft_rpc_init() {
       syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
       rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
       transport->open();
-      rpcServer[i]->ping();
+      rpcServer[i]->ping(myID);
     } catch(apache::thrift::transport::TTransportException) {
       continue;
     }
