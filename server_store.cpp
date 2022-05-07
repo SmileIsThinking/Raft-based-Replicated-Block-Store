@@ -183,7 +183,7 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     
     // IMPORTANT: keep consistency
     // write log entry first, log num second
-    int num = read_log_num() + logEntries.size();
+    int num = read_log_num() + (int) logEntries.size();
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
@@ -215,8 +215,6 @@ entry ServerStore::read_log(int index) {
     logIn.read(c, BLOCK_SIZE);
     std::string s(c);
     logEntry.content = s;
-
-    // logIn.close();
 
     //unlock
     pthread_rwlock_unlock(&loglock);

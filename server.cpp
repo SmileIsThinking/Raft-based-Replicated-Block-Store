@@ -44,36 +44,36 @@ void new_backup_helper() {
 }
 
 void pb_rpcHandler::new_backup(new_backup_ret& _return, const std::string& hostname, const int32_t port) {
-  if (!is_primary.load()) {
-    std::cerr << "new_backup: Not a Primary" << std::endl;
-    _return.rc = PB_Errno::NOT_LEADER;
-    return;
-  }
-
-  if (has_backup.load()) {
-    std::cerr << "new_backup: Backup Already Exists" << std::endl;
-    _return.rc = PB_Errno::BACKUP_EXISTS;
-    return;
-  }
-
-  std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
-  std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  otherSyncInfo = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
-  other = std::make_shared<pb_rpcConcurrentClient>(protocol, otherSyncInfo);
-  transport->open();
-  other->ping();
-
-  // block future write operations
-  pending_backup.store(true);
-  // block wait for current write operations to complete
-  while (num_write_requests.load() != 0);
-  // full file read
-  ServerStore::full_read(_return.content);
-
-  std::thread(send_heartbeat).detach();
-  std::thread(new_backup_helper).detach();
-  _return.rc = PB_Errno::SUCCESS;
+//  if (!is_primary.load()) {
+//    std::cerr << "new_backup: Not a Primary" << std::endl;
+//    _return.rc = PB_Errno::NOT_LEADER;
+//    return;
+//  }
+//
+//  if (has_backup.load()) {
+//    std::cerr << "new_backup: Backup Already Exists" << std::endl;
+//    _return.rc = PB_Errno::BACKUP_EXISTS;
+//    return;
+//  }
+//
+//  std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
+//  std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+//  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+//  otherSyncInfo = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+//  other = std::make_shared<pb_rpcConcurrentClient>(protocol, otherSyncInfo);
+//  transport->open();
+//  other->ping();
+//
+//  // block future write operations
+//  pending_backup.store(true);
+//  // block wait for current write operations to complete
+//  while (num_write_requests.load() != 0);
+//  // full file read
+//  ServerStore::full_read(_return.content);
+//
+//  std::thread(send_heartbeat).detach();
+//  std::thread(new_backup_helper).detach();
+//  _return.rc = PB_Errno::SUCCESS;
   return;
 }
 
@@ -151,7 +151,7 @@ void raft_rpc_init() {
     syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
     rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
     transport->open();
-    rpcServer[i]->ping();
+    rpcServer[i]->ping(myID);
   }
   return;
 }
@@ -436,7 +436,7 @@ void send_request_votes() {
   requestVote.term = currentTerm.load();
   requestVote.candidateId = myID;
   pthread_rwlock_rdlock(&raftloglock);
-  int index = raftLog.size() - 1;
+  int index = (int) raftLog.size() - 1;
   requestVote.lastLogIndex = index;
   if(index < 0) {
     requestVote.lastLogTerm = 0;
@@ -481,8 +481,8 @@ void send_request_votes() {
     if(curr - last_election > real_timeout) {
       break;
     }
-    for(int i = 0; i < NODE_NUM; i++) {
-      if(ret[i].voteGranted == true) {
+    for(auto & i : ret) {
+      if(i.voteGranted) {
         count++;
       }
     }
@@ -522,7 +522,7 @@ bool check_prev_entries(int prev_term, int prev_index){
 
 // ALERT: idx == -1 if the log is emtpy. But, it's ok in this implementation.
 void append_logs(const std::vector<entry>& logs, int idx){
-  if(logs.empty() == true) {
+  if(logs.empty()) {
     return;
   }
   // not idx is the appending entries' prev log index
@@ -598,7 +598,7 @@ void send_appending_requests(){
     append_entries_reply ret[NODE_NUM] = {preRet};
     
     pthread_rwlock_rdlock(&raftloglock);
-    int lastIndex = raftLog.size() - 1;
+    int lastIndex = (int) raftLog.size() - 1;
     pthread_rwlock_unlock(&raftloglock);
 
     for (int i = 0; i < NODE_NUM; i++) {
@@ -624,8 +624,8 @@ void send_appending_requests(){
     }
 
     
-    int ack_num = 0;  // TODO: think about it, concurrentlly add one with load/fetch_add
-    while(1) {
+    int ack_num = 0;  // TODO: think about it, concurrently add one with load/fetch_add
+    while(true) {
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
@@ -655,29 +655,6 @@ void send_appending_requests(){
         }
       }
     }
-
-    int N = commitIndex;
-    while(1) {
-      N++;
-      if(N > lastIndex) {
-        break;
-      }
-      int count = 0;
-
-      for(int i = 0; i < NODE_NUM; i++) {
-        if(matchIndex[i] >= N) {
-          count++;
-        }
-      }
-
-      if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
-        commitIndex = N;
-      }else {
-        break;
-      }
-    }
-
-    return;
 }
 
 void start_raft_server(int id) {
@@ -743,60 +720,6 @@ int main(int argc, char** argv) {
   // std::string t;
   std::cout << "Input terminate if you want to terminate" << std::endl;
   std::cin.ignore();
-
-  // raft_rpc_init();
-  // log store test
-
-  // std::vector<entry> logEntries;
-  // entry logEntry;
-  // logEntry.command = 1;
-  // logEntry.term = 2;
-  // logEntry.address = 333;
-  // stringGenerator(logEntry.content, BLOCK_SIZE);
-
-  // logEntries.emplace_back(logEntry);
-
-  // entry_format_print(logEntry);
-  // // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
-  // ServerStore::append_log(logEntries);
-
-  // logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
-  // std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
-  // entry_format_print(logEntry);
-
-
-
-  // num_write_requests.store(0);
-
-
-
-  // // start pb server in background
-  // std::thread pb(start_pb_server);
-
-  // // If backup, attempt to connect to primary. We assume node 0 is primary
-  // if (!is_primary.load()) {
-  //   int primary_id = std::stoi(argv[2]);
-  //   connect_to_primary(addr(primary_id), pb_port(primary_id));
-  // }
-
-  // // start blob server
-  // std::thread blob(start_blob_server);
-
-  // // check for primary failure
-  // if (!is_primary.load()) {
-  //   while (true) {
-  //     sleep(HB_FREQ);
-  //     time_t curr = time(NULL);
-  //     if (curr - last_heartbeat > HB_FREQ * 2) {
-  //       std::cout << "Primary Failure" << std::endl;
-  //       is_primary.store(true);
-  //       break;
-  //     }
-  //   }
-  // }
-
-  // blob.join();
-  // pb.join();
   return 0;
 }
 
