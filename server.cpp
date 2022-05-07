@@ -143,18 +143,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
 /* ===================================== */
 /* Raft Implementation  */
 /* ===================================== */
-void raft_rpc_init() {
-  for(int i = 0; i < NODE_NUM; i++) {
-    std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[i], raftPort[i]));
-    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-    syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
-    rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
-    transport->open();
-    rpcServer[i]->ping();
-  }
-  return;
-}
+
 
 // TODO: seq num
 void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
@@ -305,7 +294,7 @@ void appendTimeout() {
       break;
     }
     time_t curr = time(NULL);
-    std::cout << "curr time: " << curr << std::endl;
+    // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_append > APPEND_TIMEOUT) {
       break;
     }
@@ -419,7 +408,13 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
 }
 
 void send_vote(int ID, request_vote_reply* ret, const request_vote_args& requestVote) {
-  rpcServer[ID]->request_vote(ret[ID], requestVote);
+  try {
+    rpcServer[ID]->request_vote(ret[ID], requestVote);
+  }catch(apache::thrift::transport::TTransportException) {
+    std::cout << "Node: " << ID << "is DEAD!" << std::endl;
+    return;
+  }
+  
   return;
 }
 
@@ -438,7 +433,12 @@ void send_request_votes() {
   pthread_rwlock_rdlock(&raftloglock);
   int index = raftLog.size() - 1;
   requestVote.lastLogIndex = index;
-  requestVote.lastLogTerm = raftLog[index].term;
+  if(index < 0) {
+    requestVote.lastLogTerm = 0;
+  }else {
+    requestVote.lastLogTerm = raftLog[index].term;
+  }
+  
   pthread_rwlock_unlock(&raftloglock);
 
   request_vote_reply ret[NODE_NUM];
@@ -568,7 +568,13 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
 }
 
 void send_appending(int ID, append_entries_reply* ret, const append_entries_args* appendEntry) {
-  rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
+  try {
+    rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
+  }catch(apache::thrift::transport::TTransportException) {
+    std::cout << "Node: " << ID << "is DEAD!" << std::endl;
+    return;
+  }
+  
   return;
 }
 
@@ -675,6 +681,21 @@ void send_appending_requests(){
     return;
 }
 
+void raft_rpcHandler::ping(int other) {
+  try {
+    std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[other], raftPort[other]));
+    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+    syncInfo[other] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+    rpcServer[other] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[other]);
+    transport->open();
+    std::cout << "ping success" << std::endl;
+  } catch (apache::thrift::transport::TTransportException) {
+    std::cout << "ping fail" << std::endl;
+  }
+  return;
+}
+
 void start_raft_server(int id) {
   if(id < 0 || id > 2) {
     std::cout << "Unknown ID" << std::endl;
@@ -690,12 +711,30 @@ void start_raft_server(int id) {
   std::shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(RAFT_SERVER_WORKER);
 
   TThreadPoolServer raft_server(processor, serverTransport, transportFactory, protocolFactory, threadManager);
-
   threadManager->threadFactory(threadFactory);
   threadManager->start();
   raft_server.serve();
 }
 
+void raft_rpc_init() {
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
+    try {
+      std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[i], raftPort[i]));
+      std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+      std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+      syncInfo[i] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+      rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
+      transport->open();
+      rpcServer[i]->ping(myID);
+    } catch(apache::thrift::transport::TTransportException) {
+      continue;
+    }
+  }
+  return;
+}
 
 void server_init() {
 
@@ -706,10 +745,17 @@ void server_init() {
   ServerStore::init(myID);
   leaderID.store(-1);
 
-  int term = 0, vote = 0;
-  ServerStore::read_state(&term, &vote);
+  int term = 0, vote = -1;
+  int ret = ServerStore::read_state(&term, &vote);
+  if(ret == -1) {
+    ServerStore::write_state(term, vote);
+    currentTerm.store(term);
+    votedFor.store(vote);
+  }
   raftLog = ServerStore::read_full_log();
   
+  
+  raft_rpc_init();
   for(int i = 0; i < (int)raftLog.size(); i++) {
     std::cout << "Index:  " << i << std::endl;
     entry_format_print(raftLog[i]);
@@ -726,13 +772,18 @@ int main(int argc, char** argv) {
     return 1;
   }
   myID = std::atoi(argv[1]);
+
+  std::thread blob(start_blob_server);
+  std::thread raft(start_raft_server, myID);
   server_init();
 
 
+  blob.join();
+  raft.join();
   // sleep(10);
   // std::string t;
-  std::cout << "Input terminate if you want to terminate" << std::endl;
-  std::cin.ignore();
+  // std::cout << "Input terminate if you want to terminate" << std::endl;
+  // std::cin.ignore();
 
   // raft_rpc_init();
   // log store test
