@@ -102,21 +102,6 @@ pthread_rwlock_t raftloglock;
 /* ===================================== */
 /* Persistent State */
 
-
-// typedef struct logEntry_ {
-//     int commmand;
-//     int term;
-// }logEntry;
-
-// typedef struct persistStates_ {
-//     std::atomic<int> currentTerm{0};   // init to 0
-//     std::atomic<int> votedFor{-1};  // init to -1
-//     std::atomic<int entryNum = 0;
-//     std::vector<entry> raftLog;
-// }persistStates;
-
-// persistStates pStates;
-
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
 // std::atomic<int> entryNum{0};  
