@@ -126,8 +126,9 @@ public:
         std::cout << "Raft Node Started" << std::endl;
     }
 
-    void ping() {
-        printf("%n: raft ping n", &myID);
+    void ping(const int32_t pingID) {
+        // Your implementation goes here
+        printf("ping\n");
     }
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);

@@ -156,6 +156,8 @@ void raft_rpc_init() {
   return;
 }
 
+
+
 // TODO: seq num
 void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // not a leader
