@@ -305,7 +305,7 @@ void appendTimeout() {
       break;
     }
     time_t curr = time(NULL);
-    std::cout << "curr time: " << curr << std::endl;
+    // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_append > APPEND_TIMEOUT) {
       break;
     }
@@ -438,7 +438,12 @@ void send_request_votes() {
   pthread_rwlock_rdlock(&raftloglock);
   int index = raftLog.size() - 1;
   requestVote.lastLogIndex = index;
-  requestVote.lastLogTerm = raftLog[index].term;
+  if(index < 0) {
+    requestVote.lastLogTerm = 0;
+  }else {
+    requestVote.lastLogTerm = raftLog[index].term;
+  }
+  
   pthread_rwlock_unlock(&raftloglock);
 
   request_vote_reply ret[NODE_NUM];
@@ -706,8 +711,13 @@ void server_init() {
   ServerStore::init(myID);
   leaderID.store(-1);
 
-  int term = 0, vote = 0;
-  ServerStore::read_state(&term, &vote);
+  int term = 0, vote = -1;
+  int ret = ServerStore::read_state(&term, &vote);
+  if(ret == -1) {
+    ServerStore::write_state(term, vote);
+    currentTerm.store(term);
+    votedFor.store(vote);
+  }
   raftLog = ServerStore::read_full_log();
   
   for(int i = 0; i < (int)raftLog.size(); i++) {
