@@ -59,8 +59,8 @@ public:
         printf("%s: blob_ping\n", is_primary ? "primary" : "backup");
     }
 
-    void read(read_ret& _return, const int64_t addr);
-    void write(write_ret& _return, const int64_t addr, const std::string& value);
+    void read(request_ret& _return, const int64_t addr);
+    void write(request_ret& _return, const int64_t addr, const std::string& value);
 };
 
 class pb_rpcHandler : virtual public pb_rpcIf {
@@ -149,6 +149,7 @@ public:
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };
 
+void new_request(request_ret& _return, entry e);
 
 void raft_rpc_init();
 void toFollower(int term);
@@ -157,3 +158,5 @@ void toLeader();
 
 void send_request_votes();
 void send_appending_requests();
+
+void entry_format_print(entry logEntry);
