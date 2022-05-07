@@ -146,7 +146,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
 
 
 // TODO: seq num
-void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
+void blob_rpcHandler::read(request_ret& _return, const request& req) {
   // not a leader
   // TODO: what if currently there is no leader
 
@@ -166,29 +166,37 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 
   entry raftEntry;
   raftEntry.command = 0;
-  raftEntry.address = addr;
+  raftEntry.address = req.address;
   raftEntry.term = currentTerm.load();
 
-  new_request(_return, raftEntry);
+  new_request(_return, raftEntry, req);
   return;
 
   // _return.rc = Errno::UNEXPECTED;
   // return;
 }
 
-void new_request(request_ret& _return, entry e) {
-  std::vector<entry> tmpLog;
-  tmpLog.emplace_back(e);
-  ServerStore::append_log(tmpLog);
-
-  pthread_rwlock_wrlock(&raftloglock);
-  raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
+void new_request(request_ret& _return, entry e, const request& req) {
+  std::string s;
+  s = std::to_string(req.clientID) + " " + std::to_string(req.seqNum);
   int reqIndex = raftLog.size() - 1;
+  // if the request was not sent before, append to log
+  if (uset.find(s) == uset.end()){
+    uset.insert(s);
+    std::vector<entry> tmpLog;
+    tmpLog.emplace_back(e);
+    ServerStore::append_log(tmpLog);
 
-  nextIndex[myID] = reqIndex + 1;
-  matchIndex[myID] = reqIndex;  
-  pthread_rwlock_unlock(&raftloglock);
+    pthread_rwlock_wrlock(&raftloglock);
+    raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
+    reqIndex = raftLog.size() - 1;
 
+    nextIndex[myID] = reqIndex + 1;
+    matchIndex[myID] = reqIndex;  
+    pthread_rwlock_unlock(&raftloglock);
+
+  }
+  
   std::string value;
   while(1) {
     if(commitIndex >= reqIndex) {
@@ -217,7 +225,7 @@ void applyToStateMachine() {
   return;
 }
 
-void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std::string& value) {
+void blob_rpcHandler::write(request_ret& _return, const request& req) {
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
     _return.rc = Errno::NO_LEADER;
@@ -233,11 +241,11 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
 
   entry raftEntry;
   raftEntry.command = 1;
-  raftEntry.address = addr;
-  raftEntry.content = value;
+  raftEntry.address = req.address;
+  raftEntry.content = req.content;
   raftEntry.term = currentTerm.load();
 
-  new_request(_return, raftEntry);
+  new_request(_return, raftEntry, req);
   return;  
 
 // retry:

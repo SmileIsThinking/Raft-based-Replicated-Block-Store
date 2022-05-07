@@ -7,6 +7,7 @@
 #define LOG_NUM "LOG_NUM"
 #define STATE "STATE"
 
+
 namespace ServerStore {
 
     int init(int node_id);
@@ -23,6 +24,7 @@ namespace ServerStore {
     int remove_log(int index);
     int write_state(int currentTerm, int votedFor);
     int read_state(int* currentTerm, int* votedFor);
+    
 }
 
 /*

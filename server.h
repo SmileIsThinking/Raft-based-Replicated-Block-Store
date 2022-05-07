@@ -19,6 +19,8 @@
 #include "include.h"
 #include "server_store.h"
 #include <vector>
+#include <unordered_set>
+#include <algorithm>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -59,8 +61,8 @@ public:
         printf("%s: blob_ping\n", is_primary ? "primary" : "backup");
     }
 
-    void read(request_ret& _return, const int64_t addr);
-    void write(request_ret& _return, const int64_t addr, const std::string& value);
+    void read(request_ret& _return, const request& req);
+    void write(request_ret& _return, const request& req);
 };
 
 class pb_rpcHandler : virtual public pb_rpcIf {
@@ -134,6 +136,8 @@ int lastApplied;
 int nextIndex[NODE_NUM];
 int matchIndex[NODE_NUM];
 
+// linearizable semantics
+std::unordered_set<std::string> uset;
 
 class raft_rpcHandler : virtual public raft_rpcIf {
 public:
@@ -146,7 +150,7 @@ public:
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 };
 
-void new_request(request_ret& _return, entry e);
+void new_request(request_ret& _return, entry e, const request& req);
 
 void raft_rpc_init();
 void toFollower(int term);

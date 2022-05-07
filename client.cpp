@@ -13,14 +13,14 @@ int64_t str_to_int(const std::string& number){
     return value;
 }
 
-int read(const int64_t address, std::string& _return){
+int read(const request& req, std::string& _return){
     std::cout<<"start to read a block" <<std::endl;
-    int res = BlockStore::read(address, _return, max_tries, sleep_time);
+    int res = BlockStore::read(req, _return, max_tries, sleep_time);
     return res;
 }
 
-int write(const int64_t address, std::string& write){
-    Errno::type res = BlockStore::write(address, write, max_tries, sleep_time);
+int write(const request& req){
+    Errno::type res = BlockStore::write( req,  max_tries, sleep_time);
     std::cout<<"write returned" <<std::endl;
     return res;
 }
@@ -36,78 +36,86 @@ void padding(std::string& string, int size){
     string.insert(string.size(), size - string.size(), '\0');
 }
 
-void shell(){
-    std::string input = "";
-    std::string args = "";
-    while (input != "quit"){
-        //Print menu
-        std::cout << "\n\n********\nMenu\n********" << std::endl
-                  << "  read <path to file on server>" << std::endl
-                  << "  (p)write <text>" << std::endl
-                  << "  quit" << std::endl;
+// void shell(){
+//     std::string input = "";
+//     std::string args = "";
+//     while (input != "quit"){
+//         //Print menu
+//         std::cout << "\n\n********\nMenu\n********" << std::endl
+//                   << "  read <path to file on server>" << std::endl
+//                   << "  (p)write <text>" << std::endl
+//                   << "  quit" << std::endl;
 
-        std::cout << "$ ";
-        std::cin >> input;
-        std::cout << std::endl;
+//         std::cout << "$ ";
+//         std::cin >> input;
+//         std::cout << std::endl;
 
-        if (!std::cin){
-            std::cin.clear();
-            std::cin.ignore(10000,'\n');
-        }
+//         if (!std::cin){
+//             std::cin.clear();
+//             std::cin.ignore(10000,'\n');
+//         }
 
-        std::getline(std::cin, args);
-        if (args.length() > 1) args = args.substr(1, args.length());
+//         std::getline(std::cin, args);
+//         if (args.length() > 1) args = args.substr(1, args.length());
 
-        // Make server calls when necessary
-        try{
-            if (input == "read") {
-                std::string buff;
-                int ret_code;
-                // note that if there's no numbers, the result will be 0
-                int64_t value;
-                std::istringstream iss(args);
-                iss >> value;
-                ret_code = read(value, buff);
-                if (ret_code != 0){
-                    std::cout << "ErrNo: " << value << std::endl;
-                    perror("open() returned ");
-                    std::cout << std::endl;
-                }
-                std::cout << buff.substr(0, 10) << std::endl;
-            } else if (input == "write") {
-                int resp = write(0, args);
-                if (resp < 0){
-                    std::cout << "ErrNo: " << errno << std::endl;
-                    perror("write() returned ");
-                    std::cout << std::endl;
-                }
-            } else if (input == "pwrite") {
-            }  else if (input != "quit"){
-                std::cout << "\nCommand Not Recognized\n";
-            }
-        }catch (apache::thrift::TException &tx){
-            std::cout<<"Error: " <<tx.what() <<std::endl;
-        }
-    }
-//    delete afesq;
-}
+//         // Make server calls when necessary
+//         try{
+//             if (input == "read") {
+//                 std::string buff;
+//                 int ret_code;
+//                 // note that if there's no numbers, the result will be 0
+//                 int64_t value;
+//                 std::istringstream iss(args);
+//                 iss >> value;
+//                 ret_code = read(value, buff);
+//                 if (ret_code != 0){
+//                     std::cout << "ErrNo: " << value << std::endl;
+//                     perror("open() returned ");
+//                     std::cout << std::endl;
+//                 }
+//                 std::cout << buff.substr(0, 10) << std::endl;
+//             } else if (input == "write") {
+//                 int resp = write(0, args);
+//                 if (resp < 0){
+//                     std::cout << "ErrNo: " << errno << std::endl;
+//                     perror("write() returned ");
+//                     std::cout << std::endl;
+//                 }
+//             } else if (input == "pwrite") {
+//             }  else if (input != "quit"){
+//                 std::cout << "\nCommand Not Recognized\n";
+//             }
+//         }catch (apache::thrift::TException &tx){
+//             std::cout<<"Error: " <<tx.what() <<std::endl;
+//         }
+//     }
+// //    delete afesq;
+// }
 
 int main(int argc, char** argv) {
     ClientState clientState;
+    int clientId;
     if (argc == 2){
-        max_tries = std::stoi(argv[2]);
+        clientId = std::stoi(argv[2]);
     } else if (argc == 3){
-        max_tries = std::stoi(argv[2]);
+        clientId = std::stoi(argv[2]);
         sleep_time = std::stoi(argv[3]);
     }
     std::string s = "1234";
     std::cout<<"client start" <<std::endl;
     padding(s, 4096);
     std::cout<<"size of the string: "<<s.size()<<std::endl;
-    write(0, s);
+    request req;
+    req.clientID = clientId;
+    req.seqNum = 0;
+    req.address = 0;
+    req.content = s;
+    write(req);
     std::string read_val;
-    read(0, read_val);
+    req.seqNum = req.seqNum + 1;
+    req.content = " ";
+    read(req, read_val);
     std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
-    shell();
+    // shell();
     return 0;
 }
