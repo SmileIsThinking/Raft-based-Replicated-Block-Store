@@ -249,7 +249,50 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
   raftEntry.term = currentTerm.load();
 
   new_request(_return, raftEntry);
-  return;
+  return;  
+
+// retry:
+
+//   // creating a copy to followers, block write requests
+//   while (pending_candidate.load());
+//   // exist write requests, block whole file read for creating new backups
+//   num_write_requests.fetch_add(1, std::memory_order_acq_rel);
+//   // in case of race condition
+//   if (pending_candidate.load()) {
+//     num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+//     goto retry;
+//   }
+
+//   int64_t seq;
+//   int result = ServerStore::write(addr, value);
+
+//   // done with writing
+//   num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
+
+//   if (result != 0){
+//     _return.rc = Errno::UNEXPECTED;
+//     return ;
+//   }
+    
+//   // TODO : write request
+//   for(int i = 0; i < NODE_NUM; i++) {
+//     if(i == myID) {
+//       continue;
+//     }
+//     std::cout << "send write value to replicas " << i << std::endl;
+//     // PB_Errno::type reply = rpcServer[i]->update(addr, value, seq);
+//     // if (reply == PB_Errno::SUCCESS){
+//     //   _return.rc = Errno::SUCCESS;
+//     //   return ;
+//     // }
+//     // else{
+//     //   _return.rc = Errno::UNEXPECTED;
+//     //   return ;
+//     // }
+//     return;
+//       // should not happen
+      
+//   }
   
 }
 
@@ -262,7 +305,7 @@ void appendTimeout() {
       break;
     }
     time_t curr = time(NULL);
-    std::cout << "curr time: " << curr << std::endl;
+    // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_append > APPEND_TIMEOUT) {
       break;
     }
@@ -393,12 +436,14 @@ void send_request_votes() {
   requestVote.term = currentTerm.load();
   requestVote.candidateId = myID;
   pthread_rwlock_rdlock(&raftloglock);
-  int index = (int) raftLog.size() - 1;
+  int index = raftLog.size() - 1;
   requestVote.lastLogIndex = index;
-  if (index >= 0)
-      requestVote.lastLogTerm = raftLog[index].term;
-  else
-      requestVote.lastLogTerm = 0;
+  if(index < 0) {
+    requestVote.lastLogTerm = 0;
+  }else {
+    requestVote.lastLogTerm = raftLog[index].term;
+  }
+  
   pthread_rwlock_unlock(&raftloglock);
 
   request_vote_reply ret[NODE_NUM];
@@ -426,7 +471,7 @@ void send_request_votes() {
   srand (time(NULL));
   int real_timeout = rand() % ELECTION_TIMEOUT + ELECTION_TIMEOUT;
 
-  while(true) {
+  while(1) {
     if(role.load() != 1) {
       std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
       return;
@@ -436,8 +481,8 @@ void send_request_votes() {
     if(curr - last_election > real_timeout) {
       break;
     }
-    for(auto & i : ret) {
-      if(i.voteGranted) {
+    for(int i = 0; i < NODE_NUM; i++) {
+      if(ret[i].voteGranted == true) {
         count++;
       }
     }
@@ -477,7 +522,7 @@ bool check_prev_entries(int prev_term, int prev_index){
 
 // ALERT: idx == -1 if the log is emtpy. But, it's ok in this implementation.
 void append_logs(const std::vector<entry>& logs, int idx){
-  if(logs.empty()) {
+  if(logs.empty() == true) {
     return;
   }
   // not idx is the appending entries' prev log index
@@ -580,7 +625,7 @@ void send_appending_requests(){
 
     
     int ack_num = 0;  // TODO: think about it, concurrentlly add one with load/fetch_add
-    while(true) {
+    while(1) {
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
@@ -610,6 +655,29 @@ void send_appending_requests(){
         }
       }
     }
+
+    int N = commitIndex;
+    while(1) {
+      N++;
+      if(N > lastIndex) {
+        break;
+      }
+      int count = 0;
+
+      for(int i = 0; i < NODE_NUM; i++) {
+        if(matchIndex[i] >= N) {
+          count++;
+        }
+      }
+
+      if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
+        commitIndex = N;
+      }else {
+        break;
+      }
+    }
+
+    return;
 }
 
 void start_raft_server(int id) {
@@ -643,8 +711,13 @@ void server_init() {
   ServerStore::init(myID);
   leaderID.store(-1);
 
-  int term = 0, vote = 0;
-  ServerStore::read_state(&term, &vote);
+  int term = 0, vote = -1;
+  int ret = ServerStore::read_state(&term, &vote);
+  if(ret == -1) {
+    ServerStore::write_state(term, vote);
+    currentTerm.store(term);
+    votedFor.store(vote);
+  }
   raftLog = ServerStore::read_full_log();
   
   for(int i = 0; i < (int)raftLog.size(); i++) {
@@ -662,7 +735,7 @@ int main(int argc, char** argv) {
     std::cout << "Usage: ./server <my_node_id> " << std::endl;
     return 1;
   }
-  myID = (int) strtol(argv[1],NULL,10); //std::atoi(argv[1]);
+  myID = std::atoi(argv[1]);
   server_init();
 
 
@@ -671,6 +744,59 @@ int main(int argc, char** argv) {
   std::cout << "Input terminate if you want to terminate" << std::endl;
   std::cin.ignore();
 
+  // raft_rpc_init();
+  // log store test
+
+  // std::vector<entry> logEntries;
+  // entry logEntry;
+  // logEntry.command = 1;
+  // logEntry.term = 2;
+  // logEntry.address = 333;
+  // stringGenerator(logEntry.content, BLOCK_SIZE);
+
+  // logEntries.emplace_back(logEntry);
+
+  // entry_format_print(logEntry);
+  // // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
+  // ServerStore::append_log(logEntries);
+
+  // logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
+  // std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
+  // entry_format_print(logEntry);
+
+
+
+  // num_write_requests.store(0);
+
+
+
+  // // start pb server in background
+  // std::thread pb(start_pb_server);
+
+  // // If backup, attempt to connect to primary. We assume node 0 is primary
+  // if (!is_primary.load()) {
+  //   int primary_id = std::stoi(argv[2]);
+  //   connect_to_primary(addr(primary_id), pb_port(primary_id));
+  // }
+
+  // // start blob server
+  // std::thread blob(start_blob_server);
+
+  // // check for primary failure
+  // if (!is_primary.load()) {
+  //   while (true) {
+  //     sleep(HB_FREQ);
+  //     time_t curr = time(NULL);
+  //     if (curr - last_heartbeat > HB_FREQ * 2) {
+  //       std::cout << "Primary Failure" << std::endl;
+  //       is_primary.store(true);
+  //       break;
+  //     }
+  //   }
+  // }
+
+  // blob.join();
+  // pb.join();
   return 0;
 }
 

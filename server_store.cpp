@@ -15,6 +15,7 @@ int curr_seq = 0;
 
 const int entrySize = 2 * sizeof(int32_t) + sizeof(int64_t) + BLOCK_SIZE;
 
+std::string state_file;
 pthread_rwlock_t rwlock;
 
 pthread_rwlock_t loglock;
@@ -73,9 +74,9 @@ int ServerStore::init(int node_id) {
     pthread_rwlock_unlock(&loglock);
 
     pthread_rwlock_init(&statelock, NULL);
-    filename = STATE + std::to_string(node_id);
-    std::cout << filename << std::endl;
-    state_fd = open(filename.c_str(), O_RDWR | O_CREAT, mode);
+    state_file = STATE + std::to_string(node_id);
+    std::cout << state_file << std::endl;
+    state_fd = open(state_file.c_str(), O_RDWR | O_CREAT, mode);
     if (state_fd == -1) {
         return -1;
     }
@@ -278,7 +279,13 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
 
 int ServerStore::read_state(int* currentTerm, int* votedFor) {
     struct stat fileStat;
+
+    if(stat(state_file.c_str(), &fileStat) == 0) {
+        std::cout << "STATE DOES NOT EXIST" << std::endl;
+        return -1;
+    }
     int ret = pthread_rwlock_rdlock(&statelock);
+
     if (ret != 0) {
         std::cout << "LOCK ERROR!" << std::endl;
         return -1;
