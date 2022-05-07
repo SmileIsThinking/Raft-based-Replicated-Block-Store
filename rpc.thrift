@@ -101,8 +101,6 @@ struct append_entries_reply {
 service raft_rpc {
     void ping(),
 
-    // new request from a client
-    client_request_reply new_request(1:entry raftEntry, 2:i32 seq),
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
 }

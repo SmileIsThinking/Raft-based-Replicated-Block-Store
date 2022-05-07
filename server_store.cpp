@@ -260,15 +260,14 @@ int ServerStore::remove_log(int index) {
 }
 
 int ServerStore::write_state(int currentTerm, int votedFor) {
+    std::cout << "start write state" << std::endl;
     int ret = pthread_rwlock_wrlock(&statelock);
     if (ret != 0) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
         return -1;
     }
-
+    // std::cout << "lock ends" << std::endl;
     std::string s = std::to_string(currentTerm) + " " + std::to_string(votedFor);
-    // lseek(state_fd, 0, SEEK_SET);
-    
     int len = s.size();
     pwrite(state_fd, s.c_str(), len, 0);
     pthread_rwlock_unlock(&statelock);
@@ -287,7 +286,7 @@ int ServerStore::read_state(int* currentTerm, int* votedFor) {
     fstat(state_fd, &fileStat);
     char* buf = new char[fileStat.st_size + 1];
     pread(state_fd, buf, fileStat.st_size + 1, 0);
-    pthread_rwlock_unlock(&rwlock);
+    pthread_rwlock_unlock(&statelock);
 
     std::string s(buf);
     std::string token;
