@@ -289,7 +289,7 @@ void appendTimeout() {
   std::cout << "append timeout" << std::endl;
   std::cout << "role: " << role.load() << std::endl;
   while(1) {
-    
+    // std::cout << "append timeouting" << std::endl;
     if(role.load() != 2) {
       break;
     }
@@ -385,10 +385,12 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
   }
 
   if(requestVote.term > currentTerm.load()) {
+    std::cout << "Get larger term!" << std::endl;
     toFollower(requestVote.term);
   }
   
   int vote = votedFor.load();
+  std::cout << vote << std::endl;
   if(vote == -1 || vote == requestVote.candidateId) {
     if(requestVote.lastLogTerm > currentTerm.load()) {
       ret.voteGranted = true;
@@ -400,15 +402,24 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
       return;  
     } 
   }
-
+  std::cout << "vote " << vote << std::endl;
   ret.voteGranted = false;
   ret.term = currentTerm.load();
+  std::cout << "vote " << vote << std::endl;
   return;    
  
 }
 
+/*
+pure virtual method called
+terminate called without an active exception
+
+If you encounter this error, be aware of the deleting objects issue
+https://tombarta.wordpress.com/2008/07/10/gcc-pure-virtual-method-called/
+*/
 void send_vote(int ID, request_vote_reply* ret, const request_vote_args& requestVote) {
   try {
+
     rpcServer[ID]->request_vote(ret[ID], requestVote);
   }catch(apache::thrift::transport::TTransportException) {
     std::cout << "Node: " << ID << "is DEAD!" << std::endl;
@@ -442,6 +453,7 @@ void send_request_votes() {
   pthread_rwlock_unlock(&raftloglock);
 
   request_vote_reply ret[NODE_NUM];
+  // request_vote_reply 
 
   std::thread* requestThread = nullptr;
 
@@ -456,8 +468,10 @@ void send_request_votes() {
     std::cout << "send vote request to " << i << std::endl;
     // rpcServer[i]->request_vote(ret[i], requestVote);
 
+    // detach: variable liveness should be guaranteed!
     requestThread = new std::thread(send_vote, i, ret, requestVote);
-    requestThread->detach();
+    // TODO: multi-thread
+    requestThread->join();
   }
 
   time(&last_election);
@@ -466,9 +480,13 @@ void send_request_votes() {
   srand (time(NULL));
   int real_timeout = rand() % ELECTION_TIMEOUT + ELECTION_TIMEOUT;
 
+
   while(1) {
-    if(role.load() != 1) {
-      std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+    std::cout << "My role: " << role.load() << std::endl;
+    if(role.load() == 2) {
+      std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
+      // std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+      // toFollower()
       return;
     }
     int count = 0;
@@ -490,8 +508,8 @@ void send_request_votes() {
     }
   }
 
-  if(role.load() != 1) {
-    std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
+  if(role.load() == 2) {
+    std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
     return;
   }
 
@@ -584,7 +602,7 @@ void send_appending_requests(){
         return;
     }
 
-    std::cout << "Send Request Votes to others!" << std::endl;
+    std::cout << "Send Appending entries to others!" << std::endl;
 
     std::thread* appendThread = nullptr;
     append_entries_args preEntry;
@@ -780,6 +798,7 @@ int main(int argc, char** argv) {
 
   blob.join();
   raft.join();
+  std::cout << "why terminate" << std::endl;
   // sleep(10);
   // std::string t;
   // std::cout << "Input terminate if you want to terminate" << std::endl;
