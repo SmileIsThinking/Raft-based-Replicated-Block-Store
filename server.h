@@ -151,6 +151,8 @@ public:
     void ping(int other);
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
+
+    void compareTest(const std::vector<entry> & leaderLog, const int32_t leaderTerm, const int32_t leaderVote);
 };
 
 void new_request(request_ret& _return, entry e);
@@ -164,3 +166,6 @@ void send_request_votes();
 void send_appending_requests();
 
 void entry_format_print(entry logEntry);
+void applyToStateMachine();
+
+void new_request(request_ret& _return, entry e);

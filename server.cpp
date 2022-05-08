@@ -900,38 +900,6 @@ int main(int argc, char** argv) {
   // entry_format_print(logEntry);
 
 
-
-  // num_write_requests.store(0);
-
-
-
-  // // start pb server in background
-  // std::thread pb(start_pb_server);
-
-  // // If backup, attempt to connect to primary. We assume node 0 is primary
-  // if (!is_primary.load()) {
-  //   int primary_id = std::stoi(argv[2]);
-  //   connect_to_primary(addr(primary_id), pb_port(primary_id));
-  // }
-
-  // // start blob server
-  // std::thread blob(start_blob_server);
-
-  // // check for primary failure
-  // if (!is_primary.load()) {
-  //   while (true) {
-  //     sleep(HB_FREQ);
-  //     int64_t curr = getMillisec();
-  //     if (curr - last_heartbeat > HB_FREQ * 2) {
-  //       std::cout << "Primary Failure" << std::endl;
-  //       is_primary.store(true);
-  //       break;
-  //     }
-  //   }
-  // }
-
-  // blob.join();
-  // pb.join();
   return 0;
 }
 
