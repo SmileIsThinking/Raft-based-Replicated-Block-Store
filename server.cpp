@@ -177,12 +177,17 @@ void blob_rpcHandler::read(request_ret& _return, const request& req) {
 }
 
 void new_request(request_ret& _return, entry e, const request& req) {
-  std::string s;
-  s = std::to_string(req.clientID) + " " + std::to_string(req.seqNum);
+  
   int reqIndex = raftLog.size() - 1;
   // if the request was not sent before, append to log
-  if (uset.find(s) == uset.end()){
-    uset.insert(s);
+  if (umap.find(req.clientID) != umap.end() || (umap.find(req.clientID) == umap.end() && umap.at(req.clientID) < req.seqNum)){
+    auto it = umap.find(req.clientID);
+    if( it != umap.end() ) {
+        it->second = req.seqNum;
+    }
+    else {
+        umap.insert(std::make_pair(req.clientID,req.seqNum));
+    }
     std::vector<entry> tmpLog;
     tmpLog.emplace_back(e);
     ServerStore::append_log(tmpLog);

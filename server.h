@@ -19,7 +19,7 @@
 #include "include.h"
 #include "server_store.h"
 #include <vector>
-#include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 
 using namespace ::apache::thrift;
@@ -137,7 +137,7 @@ int nextIndex[NODE_NUM];
 int matchIndex[NODE_NUM];
 
 // linearizable semantics
-std::unordered_set<std::string> uset;
+std::unordered_map<int, int> umap;
 
 class raft_rpcHandler : virtual public raft_rpcIf {
 public:
