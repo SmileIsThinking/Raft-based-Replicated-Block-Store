@@ -31,8 +31,8 @@ using namespace ::apache::thrift::server;
 
 // #define APPEND_TIMEOUT  10 
 // does not receive appendEntry in timeout and convert to candidate
-#define ELECTION_TIMEOUT  3000 // gap between different requestVote rpc
-#define HB_FREQ 500 // The frequency of sending appendEntries RPC in leader
+#define ELECTION_TIMEOUT  1000 // gap between different requestVote rpc
+#define HB_FREQ 100 // The frequency of sending appendEntries RPC in leader
 int64_t last_election;
 int64_t REAL_TIMEOUT;
 // time_t last_append;
@@ -40,7 +40,6 @@ int64_t REAL_TIMEOUT;
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
-
 
 std::string my_addr;
 int my_blob_port;

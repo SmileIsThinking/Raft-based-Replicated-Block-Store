@@ -286,7 +286,7 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
 }
 
 void appendTimeout() {
-  std::cout << "election timeout" << std::endl;
+  
   std::cout << "role: " << role.load() << std::endl;
   while(1) {
     // std::cout << "append timeouting" << std::endl;
@@ -295,7 +295,8 @@ void appendTimeout() {
     }
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
-    if(curr - last_election > ELECTION_TIMEOUT) {
+    if(curr - last_election > REAL_TIMEOUT) {
+      std::cout << "election timeout" << std::endl;
       break;
     }
   }
@@ -394,10 +395,11 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
   int vote = votedFor.load();
   std::cout << vote << std::endl;
   if(vote == -1 || vote == requestVote.candidateId) {
-    if(requestVote.lastLogTerm > currentTerm.load()) {
+    // lastLogTerm == -1: no log
+    if(requestVote.lastLogTerm == -1 || requestVote.lastLogTerm > currentTerm.load()) { 
       ret.voteGranted = true;
       votedFor.store(requestVote.candidateId);  
-      return;
+      return;      
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       last_election = getMillisec();
@@ -450,7 +452,7 @@ void send_request_votes() {
   int index = raftLog.size() - 1;
   requestVote.lastLogIndex = index;
   if(index < 0) {
-    requestVote.lastLogTerm = 0;
+    requestVote.lastLogTerm = -1;
   }else {
     requestVote.lastLogTerm = raftLog[index].term;
   }
@@ -648,7 +650,9 @@ void send_appending_requests(){
       }
       
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
-      appendThread->detach();
+      // TODO: Multi-thread
+      appendThread->join();
+      // appendThread->detach();
     }
 
     
