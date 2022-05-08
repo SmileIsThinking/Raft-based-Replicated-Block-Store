@@ -46,7 +46,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
             }
         } catch (TException &tx){
             // TODO: wait for another leader 
-            
+            server = (rand() * NODE_NUM) % NODE_NUM;
             sleep(sleep_time);
         }
     }
@@ -77,7 +77,8 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ret
         } catch (TException &tx){
             // dosth
             // server = 1 - server;
-            // TODO: wait for another leader 
+            // TODO: wait for another leader
+            server = (rand() * NODE_NUM) % NODE_NUM;
             sleep(sleep_time);
         }
     }
