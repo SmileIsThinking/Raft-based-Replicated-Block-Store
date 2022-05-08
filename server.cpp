@@ -598,7 +598,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       std::cout << "do ret success = 0" << std::endl;
       ret.term = currentTerm.load();
-      ret.success = 0;
+      ret.success = 3;
 
       return;
   } 
@@ -681,6 +681,7 @@ void send_appending_requests(){
       } else {
         appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
       }
+      ret[i].success = -1;
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
       // TODO: Multi-thread
       appendThread->join();
@@ -705,7 +706,7 @@ void send_appending_requests(){
           ack_num++;
           continue;
         }
-        
+
         if(ret[i].success == 1) {
           if(currentTerm.load() < ret[i].term) {
             toFollower(ret[i].term);
@@ -716,20 +717,21 @@ void send_appending_requests(){
 
           nextIndex[i] = lastIndex + 1;
           matchIndex[i] = nextIndex[i] - 1;      
-        }else if(ret[i].success == 0) {
+        }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
             toFollower(ret[i].term);
             return;
           }
           ack_flag[i] = 1;
           ack_num++;
-
-          nextIndex[i] = nextIndex[i] - 1;
+          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
+          // nextIndex[i] = nextIndex[i] - 1;
           // std::cout << "i " << i << std::endl;
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
-          // if(nextIndex[i] < 0) {
-          //   nextIndex[i] = 0;
-          // }
+          // ugly fix. but works
+          if(nextIndex[i] < 0) {
+            nextIndex[i] = 0;
+          }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
