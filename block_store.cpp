@@ -21,6 +21,7 @@ void BlockStore::conn_init(const std::string& hostname, const int port) {
     client = std::make_shared<blob_rpcClient>(protocol);
     transport->open();
     client->ping();
+    std::cout<<"conn_init: "<<port<<std::endl;
 }
 
 // note that if unexpected is returned, the client will retry until timeout

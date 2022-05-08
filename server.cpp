@@ -103,11 +103,10 @@ void start_pb_server() {
 }
 
 void start_blob_server() {
-  my_blob_port = cliPort[myID];
-  std::cout << "Starting Blob Server at " << my_blob_port << std::endl;
+  std::cout << "Starting Blob Server at " << cliPort[myID] << std::endl;
   ::std::shared_ptr<blob_rpcHandler> handler(new blob_rpcHandler());
   ::std::shared_ptr<TProcessor> processor(new blob_rpcProcessor(handler));
-  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(my_blob_port));
+  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(cliPort[myID]));
   ::std::shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
   ::std::shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
   std::shared_ptr<ThreadFactory> threadFactory = std::shared_ptr<ThreadFactory>(new ThreadFactory());
@@ -176,6 +175,7 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // _return.rc = Errno::UNEXPECTED;
   // return;
 }
+
 
 void new_request(request_ret& _return, entry e) {
   std::vector<entry> tmpLog;
