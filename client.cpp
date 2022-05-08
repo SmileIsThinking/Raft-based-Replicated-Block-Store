@@ -1,3 +1,15 @@
+/////////////////////////////////////////////////////////////////
+/**
+ * Running the test -
+ * 1. specify the location of break
+ * 2. command argument: server init state, timeout(print to console every second),
+ *                                          random factors (range)
+ * 3. check output, states.
+ * 4.
+ */
+
+
+
 #include <sstream>
 #include <cstring>
 #include "block_store.h"
