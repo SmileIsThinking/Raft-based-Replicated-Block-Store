@@ -268,6 +268,7 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
     }
     // std::cout << "lock ends" << std::endl;
     std::string s = std::to_string(currentTerm) + " " + std::to_string(votedFor);
+    std::cout << "Server Store write states: " << std::to_string(votedFor)<< std::endl;
     int len = (int) s.size();
     pwrite(state_fd, s.c_str(), len, 0);
     pthread_rwlock_unlock(&statelock);
