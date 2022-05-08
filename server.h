@@ -167,3 +167,6 @@ void entry_format_print(entry logEntry);
 void applyToStateMachine();
 
 void new_request(request_ret& _return, entry e);
+
+bool compare_one_log(const entry& e1, entry& e2);
+bool compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log2);

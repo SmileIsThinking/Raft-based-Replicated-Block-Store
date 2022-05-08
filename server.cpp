@@ -85,29 +85,10 @@ void pb_rpcHandler::new_backup_succeed() {
   }
 }
 
-void start_pb_server() {
-  std::cout << "Starting PB Server at " << my_pb_port << std::endl;
-  ::std::shared_ptr<pb_rpcHandler> handler(new pb_rpcHandler());
-  ::std::shared_ptr<TProcessor> processor(new pb_rpcProcessor(handler));
-  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(my_pb_port));
-  ::std::shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
-  ::std::shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
-  std::shared_ptr<ThreadFactory> threadFactory = std::shared_ptr<ThreadFactory>(new ThreadFactory());
-  std::shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(PB_SERVER_WORKER);
-
-  TThreadPoolServer pb_server(processor, serverTransport, transportFactory, protocolFactory, threadManager);
-
-  threadManager->threadFactory(threadFactory);
-  threadManager->start();
-  pb_server.serve();
-}
-
-void start_blob_server() {
-  my_blob_port = cliPort[myID];
-  std::cout << "Starting Blob Server at " << my_blob_port << std::endl;
+void start_blob_server(int id) {
   ::std::shared_ptr<blob_rpcHandler> handler(new blob_rpcHandler());
   ::std::shared_ptr<TProcessor> processor(new blob_rpcProcessor(handler));
-  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(my_blob_port));
+  ::std::shared_ptr<TServerTransport> serverTransport(new TServerSocket(cliPort[id]));
   ::std::shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
   ::std::shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
   std::shared_ptr<ThreadFactory> threadFactory = std::shared_ptr<ThreadFactory>(new ThreadFactory());
@@ -120,27 +101,6 @@ void start_blob_server() {
   blob_server.serve();
 }
 
-void connect_to_primary(const std::string& hostname, const int port) {
-  std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
-  std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  other = std::make_shared<pb_rpcClient>(protocol);
-  transport->open();
-
-  other->ping();
-
-  new_backup_ret ret;
-  other->new_backup(ret, my_addr, my_pb_port);
-  if (ret.rc != PB_Errno::SUCCESS)
-    exit(0);
-  if (ServerStore::full_write(ret.content) != 0) {
-    std::cout << "fail to write to backup" << std::endl;
-    exit(1);
-  }
-  other->new_backup_succeed();
-}
-
-
 /* ===================================== */
 /* Raft Implementation  */
 /* ===================================== */
@@ -150,7 +110,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
 void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // not a leader
   // TODO: what if currently there is no leader
-
+  // std::cout << ""
   // TODO: hangout
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
@@ -219,6 +179,7 @@ void applyToStateMachine() {
 }
 
 void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std::string& value) {
+  std::cout << "my role" << std::endl;
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
     _return.rc = Errno::NO_LEADER;
@@ -240,50 +201,6 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
 
   new_request(_return, raftEntry);
   return;  
-
-// retry:
-
-//   // creating a copy to followers, block write requests
-//   while (pending_candidate.load());
-//   // exist write requests, block whole file read for creating new backups
-//   num_write_requests.fetch_add(1, std::memory_order_acq_rel);
-//   // in case of race condition
-//   if (pending_candidate.load()) {
-//     num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-//     goto retry;
-//   }
-
-//   int64_t seq;
-//   int result = ServerStore::write(addr, value);
-
-//   // done with writing
-//   num_write_requests.fetch_sub(1, std::memory_order_acq_rel);
-
-//   if (result != 0){
-//     _return.rc = Errno::UNEXPECTED;
-//     return ;
-//   }
-    
-//   // TODO : write request
-//   for(int i = 0; i < NODE_NUM; i++) {
-//     if(i == myID) {
-//       continue;
-//     }
-//     std::cout << "send write value to replicas " << i << std::endl;
-//     // PB_Errno::type reply = rpcServer[i]->update(addr, value, seq);
-//     // if (reply == PB_Errno::SUCCESS){
-//     //   _return.rc = Errno::SUCCESS;
-//     //   return ;
-//     // }
-//     // else{
-//     //   _return.rc = Errno::UNEXPECTED;
-//     //   return ;
-//     // }
-//     return;
-//       // should not happen
-      
-//   }
-  
 }
 
 void appendTimeout() {
@@ -634,6 +551,23 @@ void send_appending(int ID, append_entries_reply* ret, const append_entries_args
   return;
 }
 
+void raft_rpcHandler::compareTest(const std::vector<entry> & leaderLog, \
+                                const int32_t leaderTerm, const int32_t leaderVote) {
+  std::cout << "===============Compare Test====================" << std::endl;
+  std::cout << "Leader Term: " << leaderTerm << std::endl;
+  std::cout << "Leader Vote: " << leaderVote <<std::endl;
+  std::cout << "My Term: " << currentTerm.load() << std::endl;
+  std::cout << "My Vote: " << votedFor.load() << std::endl;
+  bool res = compare_log_vector(leaderLog, raftLog);
+  if (res){
+    std::cout << "the logs in leader and follower " << myID <<  " are same." << std::endl;
+  } else {
+    std::cerr << "the logs in leader and follower " << myID <<  " are different." << std::endl;
+  }
+
+  std::cout << "===============================================" << std::endl;
+}
+
 void send_appending_requests(){  
     if(role.load() != 0) {
         std::cerr << "Not a Leader !!" << std::endl;
@@ -839,7 +773,9 @@ void server_init(long init_timeout) {
   }
   raftLog = ServerStore::read_full_log();
   
-  
+  commitIndex = -1;
+  lastApplied = -1;
+  leaderID.store(-1);
   raft_rpc_init();
   for(int i = 0; i < (int)raftLog.size(); i++) {
     std::cout << "Index:  " << i << std::endl;
@@ -866,7 +802,7 @@ int main(int argc, char** argv) {
   }
 
 
-  std::thread blob(start_blob_server);
+  std::thread blob(start_blob_server, myID);
   std::thread raft(start_raft_server, myID);
   server_init(init_time_out);
 
@@ -910,4 +846,25 @@ void entry_format_print(entry logEntry) {
   std::cout << "Address: " << logEntry.address << std::endl;
   std::cout << "Content: " << logEntry.content << std::endl;
   std::cout << "========================" << std::endl;
+}
+
+bool compare_one_log(const entry& e1, entry& e2){
+  if( e1.term == e2.term && e1.address == e2.address && e1.command == e2.command && e1.content == e2.content) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool  compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log2){
+  if(log1.size() != log2.size()){
+    return false;
+  }
+
+  for(int i=0; i < (int)log1.size(); i++){
+    if(compare_one_log(log1[i], log2[i]) == false){
+      return false;
+    } 
+  }
+  return true;
 }
