@@ -28,12 +28,12 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
     int try_time = 0;
     std::string read_str;
     request_ret ret_res;
-
+//  server = (rand() * NODE_NUM) % NODE_NUM;
+    server = 0;
     while(try_time < retry_time){
         try_time++;
         try{
-//            server = (rand() * NODE_NUM) % NODE_NUM;
-            server = 0;
+            std::cout<<"read connect to node "<<server<<std::endl;
             conn_init(nodeAddr[server], cliPort[server]);
             client->read(ret_res, address);
 
@@ -57,11 +57,12 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ret
     std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
     request_ret ret_res;
+    // server = (rand() * NODE_NUM) % NODE_NUM;
+    server = 0;
     while(tries > 0){
         tries--;
         try{
-//            server = (rand() * NODE_NUM) % NODE_NUM;
-            server = 0;
+            std::cout<<"write connect to node "<<server<<std::endl;
             conn_init(nodeAddr[server], cliPort[server]);
             client->write(ret_res, address, write);
             std::cout<<ret_res.rc<<std::endl;;
