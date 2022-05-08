@@ -1,7 +1,6 @@
 #include <iostream>
 #include <unistd.h>
-#include <string>
-#include <random>
+#include "util.h"
 
 void stringGenerator(std::string& str, int len) {
     static const char alphanum[] =
@@ -14,4 +13,9 @@ void stringGenerator(std::string& str, int len) {
     for (int i = 0; i < len; i++) {
         str += alphanum[rand() % (sizeof(alphanum) - 1)];
     }
+}
+
+int64_t getMillisec() {
+  using namespace std::chrono;
+  return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
