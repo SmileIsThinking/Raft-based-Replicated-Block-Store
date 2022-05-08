@@ -103,4 +103,5 @@ service raft_rpc {
 
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
+    oneway void compareTest(1: list<entry> leaderLog, 2: i32 leaderTerm, 3: i32 leaderVote),
 }
