@@ -582,15 +582,25 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   // when term >= currentTerm: toFollower
   if(appendEntries.term > currentTerm.load()) {
     std::cout << "Get larger term!" << std::endl;
-    toFollower(appendEntries.term);
-    return;
+    if(role.load() != 2) {
+      std::cout << "Change to follower " << std::endl;
+      toFollower(appendEntries.term);
+      return;
+    }else {
+      std::cout << "I am still a follower, continue processing" << std::endl;
+      ServerStore::write_state(appendEntries.term, -1);
+      currentTerm.store(appendEntries.term);     
+    }
+
   }
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   // }
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
+      std::cout << "do ret success = 0" << std::endl;
       ret.term = currentTerm.load();
-      ret.success = 0;
+      ret.success = 3;
+
       return;
   } 
 
@@ -657,7 +667,11 @@ void send_appending_requests(){
       
       if(lastIndex >= nextIndex[i]) {
         // potential error
+        std::cout << "stuck here" << std::endl;
+        std::cout << "i: " << i << std::endl;
+        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
+        std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 
@@ -668,6 +682,7 @@ void send_appending_requests(){
       } else {
         appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
       }
+      ret[i].success = -1;
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
       // TODO: Multi-thread
       appendThread->join();
@@ -675,38 +690,51 @@ void send_appending_requests(){
     }
 
       // TODO: think about it, concurrentlly add one with load/fetch_add
+    int ack_flag[NODE_NUM] = {0};
+    ack_flag[myID] = 1;
     while(1) {
+      // std::cout << "nextIndex[i]" << nextIndex[2] << std::endl;
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
       }
       int ack_num = 0;
+
       for(int i = 0; i < NODE_NUM; i++) {
-        if(i == myID) {
+        // std::cout << "nextIndex[1]" << nextIndex[1] << std::endl;
+        // std::cout << "nextIndex[2]" << nextIndex[2] << std::endl;
+        if(ack_flag[i] == 1) {
           ack_num++;
           continue;
         }
-        // if(ack_num == NODE_NUM - 1) {
-        //   break;
-        // }
+
         if(ret[i].success == 1) {
           if(currentTerm.load() < ret[i].term) {
             toFollower(ret[i].term);
             return;
           }
+          ack_flag[i] = 1;
           ack_num++;
 
           nextIndex[i] = lastIndex + 1;
           matchIndex[i] = nextIndex[i] - 1;      
-        }else if(ret[i].success == 0) {
+        }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
             toFollower(ret[i].term);
             return;
           }
+          ack_flag[i] = 1;
           ack_num++;
-
-          nextIndex[i] = nextIndex[i] - 1;
+          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
+          // nextIndex[i] = nextIndex[i] - 1;
+          // std::cout << "i " << i << std::endl;
+          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
+          // ugly fix. but works
+          if(nextIndex[i] < 0) {
+            nextIndex[i] = 0;
+          }
         }else if(ret[i].success == -2) {
+          ack_flag[i] = 1;
           ack_num++;
         }
       }
@@ -872,38 +900,6 @@ int main(int argc, char** argv) {
   // entry_format_print(logEntry);
 
 
-
-  // num_write_requests.store(0);
-
-
-
-  // // start pb server in background
-  // std::thread pb(start_pb_server);
-
-  // // If backup, attempt to connect to primary. We assume node 0 is primary
-  // if (!is_primary.load()) {
-  //   int primary_id = std::stoi(argv[2]);
-  //   connect_to_primary(addr(primary_id), pb_port(primary_id));
-  // }
-
-  // // start blob server
-  // std::thread blob(start_blob_server);
-
-  // // check for primary failure
-  // if (!is_primary.load()) {
-  //   while (true) {
-  //     sleep(HB_FREQ);
-  //     int64_t curr = getMillisec();
-  //     if (curr - last_heartbeat > HB_FREQ * 2) {
-  //       std::cout << "Primary Failure" << std::endl;
-  //       is_primary.store(true);
-  //       break;
-  //     }
-  //   }
-  // }
-
-  // blob.join();
-  // pb.join();
   return 0;
 }
 
