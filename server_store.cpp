@@ -157,7 +157,7 @@ int ServerStore::full_write(std::string& content) {
 /* ===================================== */
 
 int ServerStore::append_log(const std::vector<entry>& logEntries) {
-    if(logEntries.empty() == true) {
+    if(logEntries.empty()) {
         std::cout << "ERROR: Entry Vector is EMPTY!!!" << std::endl;
         return -1;
     }
@@ -183,7 +183,7 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     
     // IMPORTANT: keep consistency
     // write log entry first, log num second
-    int num = read_log_num() + logEntries.size();
+    int num = read_log_num() + (int) logEntries.size();
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
@@ -216,8 +216,6 @@ entry ServerStore::read_log(int index) {
     std::string s(c);
     logEntry.content = s;
 
-    // logIn.close();
-
     //unlock
     pthread_rwlock_unlock(&loglock);
 
@@ -230,12 +228,13 @@ int ServerStore::read_log_num() {
     fstat(log_num_fd, &fileStat);
     char* buf = new char[fileStat.st_size + 1];
     pread(log_num_fd, buf, fileStat.st_size + 1, 0);  
-    return atoi(buf);  
+    return (int) strtol(buf,NULL,10); //atoi(buf);
 }
 
 std::vector<entry> ServerStore::read_full_log() {
     int log_num = read_log_num();
     std::vector<entry> logEntries;
+    logEntries.reserve(log_num);
     for(int i = 0; i < log_num; i++) {
         logEntries.emplace_back(read_log(i));
     }
@@ -251,7 +250,7 @@ int ServerStore::remove_log(int index) {
     }
 
     std::string ss = std::to_string(index);
-    int len = ss.size();
+    int len = (int) ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
     std::cout << "log num: " << ss << std::endl;
     // unlock
@@ -269,7 +268,7 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
     }
     // std::cout << "lock ends" << std::endl;
     std::string s = std::to_string(currentTerm) + " " + std::to_string(votedFor);
-    int len = s.size();
+    int len = (int) s.size();
     pwrite(state_fd, s.c_str(), len, 0);
     pthread_rwlock_unlock(&statelock);
 
@@ -299,7 +298,7 @@ int ServerStore::read_state(int* currentTerm, int* votedFor) {
     std::string token;
     size_t pos = 0;
     std::string delimiter = " ";
-    while ((pos = s.find(" ")) != std::string::npos) {
+    while ((pos = s.find(' ')) != std::string::npos) {
         token = s.substr(0, pos);
         *currentTerm = std::stoi(token);
         s.erase(0, pos + delimiter.length());
