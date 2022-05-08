@@ -908,3 +908,23 @@ void entry_format_print(entry logEntry) {
   std::cout << "Content: " << logEntry.content << std::endl;
   std::cout << "========================" << std::endl;
 }
+
+bool compare_one_log(entry& e1, entry& e2){
+  if( e1.term == e2.term && e1.address == e2.address && e1.command == e2.command && e1.content == e2.content) {
+    return true;
+  } else {
+    return false;
+  }
+}
+bool  compare_log_vector(std::vector<entry>& log1, std::vector<entry>& log2){
+  if(log1.size() != log2.size()){
+    return false;
+  }
+
+  for(int i=0; i<(int)log1.size(); i++){
+    if( !compare_one_log(log1[i], log2[i])){
+      return false;
+    } 
+  }
+  return true;
+}

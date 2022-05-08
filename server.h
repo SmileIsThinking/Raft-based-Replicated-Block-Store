@@ -164,3 +164,5 @@ void send_request_votes();
 void send_appending_requests();
 
 void entry_format_print(entry logEntry);
+bool compare_one_log(entry& e1, entry& e2);
+bool compare_log_vector(std::vector<entry>& log1, std::vector<entry>& log2);
