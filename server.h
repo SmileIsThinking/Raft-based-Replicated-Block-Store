@@ -42,8 +42,6 @@ std::mt19937 gen(rd());
 std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 
 std::string my_addr;
-int my_blob_port;
-int my_pb_port;
 
 std::atomic<bool> pending_backup;
 std::atomic<bool> is_primary;
