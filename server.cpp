@@ -16,7 +16,7 @@ void pb_rpcHandler::heartbeat() {
     return;
   // note that the other server (primary) is still alive
   std::cout << "Heartbeat received" << std::endl;
-  time(&last_heartbeat);
+  last_heartbeat = getMillisec();
 }
 
 void send_heartbeat() {
@@ -400,7 +400,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
       return;
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
-      time(&last_election);
+      last_election = getMillisec();
       REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
       votedFor.store(requestVote.candidateId);   
       return;  
@@ -479,8 +479,9 @@ void send_request_votes() {
     requestThread->join();
   }
 
-  time(&last_election);
+  last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
+  // std::cout << "REAL TIMEOUT: " << REAL_TIMEOUT << std::endl;
   // random election timeout in [T, 2T] (T >> RTT)
   // srand (time(NULL));
 
@@ -495,6 +496,9 @@ void send_request_votes() {
     }
     int count = 0;
     int64_t curr = getMillisec();
+    // std::cout << "Right now the time: " << curr << std::endl;
+    // std::cout << "Last election: " << last_election << std::endl;
+    // std::cout << "TIMEOUT: " << REAL_TIMEOUT << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
       break;
     }
@@ -504,6 +508,7 @@ void send_request_votes() {
       }
     }
     if(count >= MAJORITY) {
+      std::cout << "MAJORITY" << std::endl;
       toLeader();
 
       // new thread???
@@ -561,7 +566,7 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "Receive Append Entries RPC" << std::endl;
-  time(&last_election);
+  last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
