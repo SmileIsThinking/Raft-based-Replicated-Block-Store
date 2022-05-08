@@ -819,7 +819,7 @@ void server_init(long init_timeout) {
   }
 
 
-  REAL_TIMEOUT = (init_timeout > -2000 ? init_timeout : dist(gen)) + ELECTION_TIMEOUT;
+  REAL_TIMEOUT = init_timeout > 0 ? init_timeout : dist(gen) + ELECTION_TIMEOUT;
   toFollower(term);
 }
 
