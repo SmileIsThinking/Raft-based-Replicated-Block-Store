@@ -17,6 +17,7 @@
 
 int max_tries = 6;
 int sleep_time = 1;
+int init_leader = -1;
 
 int64_t str_to_int(const std::string& number){
     int64_t value;
@@ -27,12 +28,12 @@ int64_t str_to_int(const std::string& number){
 
 int read(const int64_t address, std::string& _return){
     std::cout<<"start to read a block" <<std::endl;
-    int res = BlockStore::read(address, _return, max_tries, sleep_time);
+    int res = BlockStore::read(address, _return, init_leader,max_tries, sleep_time);
     return res;
 }
 
 int write(const int64_t address, std::string& write){
-    Errno::type res = BlockStore::write(address, write, max_tries, sleep_time);
+    Errno::type res = BlockStore::write(address, write, init_leader, max_tries, sleep_time);
     std::cout<<"write returned" <<std::endl;
     return res;
 }
@@ -107,10 +108,10 @@ void shell(){
 int main(int argc, char** argv) {
     ClientState clientState;
     if (argc == 2){
-        max_tries = std::stoi(argv[2]);
+        init_leader = std::stoi(argv[1]);
     } else if (argc == 3){
-        max_tries = std::stoi(argv[2]);
-        sleep_time = std::stoi(argv[3]);
+        max_tries = std::stoi(argv[1]);
+        sleep_time = std::stoi(argv[2]);
     }
     std::string s = "1234";
     std::cout<<"client start" <<std::endl;

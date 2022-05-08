@@ -25,7 +25,7 @@ void BlockStore::conn_init(const std::string& hostname, const int port) {
 }
 
 // note that if unexpected is returned, the client will retry until timeout
-Errno::type BlockStore::read(const int64_t address, std::string& value, int retry_time, int sleep_time) { //
+Errno::type BlockStore::read(const int64_t address, std::string& value, int init_leader, int retry_time, int sleep_time) { //
     int try_time = 0;
     std::string read_str;
     request_ret ret_res;
@@ -54,7 +54,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int retr
     return ret_res.rc;
 }
 
-Errno::type BlockStore::write(const int64_t address, std::string& write, int retry_time, int sleep_time) {
+Errno::type BlockStore::write(const int64_t address, std::string& write, int init_leader, int retry_time, int sleep_time) {
     std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
     request_ret ret_res;
