@@ -31,8 +31,8 @@ using namespace ::apache::thrift::server;
 
 // #define APPEND_TIMEOUT  10 
 // does not receive appendEntry in timeout and convert to candidate
-#define ELECTION_TIMEOUT  1000 // gap between different requestVote rpc
-#define HB_FREQ 100 // The frequency of sending appendEntries RPC in leader
+#define ELECTION_TIMEOUT  3000 // gap between different requestVote rpc
+#define HB_FREQ 2000 // The frequency of sending appendEntries RPC in leader
 int64_t last_election;
 int64_t REAL_TIMEOUT;
 // time_t last_append;
@@ -89,9 +89,9 @@ public:
 /* ===================================== */
 /* Raft Misc Variables */
 /* ===================================== */
-std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr};
+std::shared_ptr<raft_rpcIf> rpcServer[NODE_NUM] = {nullptr, nullptr, nullptr};
 std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> \
-syncInfo[NODE_NUM] = {nullptr};
+syncInfo[NODE_NUM] = {nullptr, nullptr, nullptr};
 
 int myID;
 
@@ -127,7 +127,7 @@ pthread_rwlock_t raftloglock;
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
 // std::atomic<int> entryNum{0};  
-std::vector<entry> raftLog;  // log index starts from 0!!!
+std::vector<entry> raftLog = {};  // log index starts from 0!!!
 // TODO: log vector lock?
 
 

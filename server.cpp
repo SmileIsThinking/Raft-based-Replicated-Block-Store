@@ -339,13 +339,16 @@ void toCandidate() {
 }
 
 void leaderHeartbeat() {
+  int i = 1;
 
   while(1) {
     if(role.load() != 0) {
       break;
     }   
+    std::cout << "Send heartbeat " <<  i << " !" << std::endl;
+    i++;
     std::thread(send_appending_requests).detach();
-    sleep(HB_FREQ);
+    std::this_thread::sleep_for(std::chrono::milliseconds(HB_FREQ));
   }
   return;
 }
@@ -359,8 +362,7 @@ void toLeader() {
   pthread_rwlock_unlock(&rolelock);
 
   pthread_rwlock_rdlock(&raftloglock);
-  int index = raftLog.size() - 1;
-
+  int index = (int)raftLog.size() - 1;
   pthread_rwlock_unlock(&raftloglock);
   for(int i = 0; i < NODE_NUM; i++) {
     if(i == myID) {
@@ -368,7 +370,7 @@ void toLeader() {
       matchIndex[i] = index;
     }else {
       nextIndex[i] = index + 1;
-      matchIndex[i] = 0;
+      matchIndex[i] = -1;
     }
 
   }
@@ -492,8 +494,6 @@ void send_request_votes() {
     // std::cout << "My role: " << role.load() << std::endl;
     if(role.load() == 2) {
       std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
-      // std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
-      // toFollower()
       return;
     }
     int count = 0;
@@ -511,8 +511,10 @@ void send_request_votes() {
     }
     if(count >= MAJORITY) {
       std::cout << "MAJORITY" << std::endl;
-      toLeader();
-
+      if(role.load() != 0) {
+        toLeader();
+      }
+  
       // new thread???
       // std::thread(send_appending_requests).detach();
       return;
@@ -567,9 +569,21 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
+
   std::cout << "Receive Append Entries RPC" << std::endl;
+  if(role.load() == 0) {
+    std::cout << "I am a leader now, reject append entries" << std::endl;
+    return;
+  }
   last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
+
+  // when term >= currentTerm: toFollower
+  if(appendEntries.term > currentTerm.load()) {
+    std::cout << "Get larger term!" << std::endl;
+    toFollower(appendEntries.term);
+    return;
+  }
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   // }
@@ -580,10 +594,11 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   } 
 
 
-  // if()
-
-  // when term >= currentTerm: toFollower
-  toFollower(appendEntries.term);
+  // not a leader and not a follower
+  if(role.load() == 1) {
+    toFollower(appendEntries.term);
+  }
+ 
   leaderID.store(appendEntries.leaderId);
 
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
@@ -601,6 +616,7 @@ void send_appending(int ID, append_entries_reply* ret, const append_entries_args
     rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
   }catch(apache::thrift::transport::TTransportException) {
     std::cout << "Node: " << ID << "is DEAD!" << std::endl;
+    ret[ID].success = -2;
     return;
   }
   
@@ -621,12 +637,14 @@ void send_appending_requests(){
     preEntry.leaderId = myID;
     preEntry.leaderCommit = commitIndex;    
     preEntry.entries = std::vector<entry>();
-    append_entries_args appendEntry[NODE_NUM] = {preEntry};
 
+    // learn a lesson
+    // https://stackoverflow.com/
+    // questions/201101/how-to-initialize-all-members-of-an-array-to-the-same-value
+    append_entries_args appendEntry[NODE_NUM] = {preEntry, preEntry, preEntry};
     append_entries_reply preRet;
     preRet.success = -1;
-    append_entries_reply ret[NODE_NUM] = {preRet};
-    
+    append_entries_reply ret[NODE_NUM] = {preRet, preRet, preRet};
     pthread_rwlock_rdlock(&raftloglock);
     int lastIndex = raftLog.size() - 1;
     pthread_rwlock_unlock(&raftloglock);
@@ -637,6 +655,7 @@ void send_appending_requests(){
       }
       
       if(lastIndex >= nextIndex[i]) {
+        // potential error
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
@@ -644,29 +663,31 @@ void send_appending_requests(){
       // ALERT: stack overflow
       if (appendEntry[i].prevLogIndex < 0) {
         // no log yet! be cautious of stack overflow (log[-1])
-        appendEntry[i].prevLogTerm = currentTerm.load();
+        appendEntry[i].prevLogTerm = -1;
       } else {
         appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
       }
-      
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
       // TODO: Multi-thread
       appendThread->join();
       // appendThread->detach();
     }
 
-    
-    int ack_num = 0;  // TODO: think about it, concurrentlly add one with load/fetch_add
+      // TODO: think about it, concurrentlly add one with load/fetch_add
     while(1) {
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
       }
-
+      int ack_num = 0;
       for(int i = 0; i < NODE_NUM; i++) {
-        if(ack_num == NODE_NUM - 1) {
-          break;
+        if(i == myID) {
+          ack_num++;
+          continue;
         }
+        // if(ack_num == NODE_NUM - 1) {
+        //   break;
+        // }
         if(ret[i].success == 1) {
           if(currentTerm.load() < ret[i].term) {
             toFollower(ret[i].term);
@@ -684,10 +705,15 @@ void send_appending_requests(){
           ack_num++;
 
           nextIndex[i] = nextIndex[i] - 1;
+        }else if(ret[i].success == -2) {
+          ack_num++;
         }
       }
+      if(ack_num == NODE_NUM) {
+        break;
+      }
     }
-
+    // std::cout << "Ready to Commit!" << std::endl;
     int N = commitIndex;
     while(1) {
       N++;
@@ -708,7 +734,6 @@ void send_appending_requests(){
         break;
       }
     }
-
     return;
 }
 
