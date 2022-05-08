@@ -42,8 +42,6 @@ std::mt19937 gen(rd());
 std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 
 std::string my_addr;
-int my_blob_port;
-int my_pb_port;
 
 std::atomic<bool> pending_backup;
 std::atomic<bool> is_primary;
@@ -169,3 +167,6 @@ void entry_format_print(entry logEntry);
 void applyToStateMachine();
 
 void new_request(request_ret& _return, entry e);
+
+bool compare_one_log(const entry& e1, entry& e2);
+bool compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log2);
