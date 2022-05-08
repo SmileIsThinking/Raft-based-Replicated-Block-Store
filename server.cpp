@@ -103,6 +103,7 @@ void start_pb_server() {
 }
 
 void start_blob_server() {
+  my_blob_port = cliPort[myID];
   std::cout << "Starting Blob Server at " << my_blob_port << std::endl;
   ::std::shared_ptr<blob_rpcHandler> handler(new blob_rpcHandler());
   ::std::shared_ptr<TProcessor> processor(new blob_rpcProcessor(handler));
@@ -128,7 +129,7 @@ void connect_to_primary(const std::string& hostname, const int port) {
 
   other->ping();
 
-  struct new_backup_ret ret;
+  new_backup_ret ret;
   other->new_backup(ret, my_addr, my_pb_port);
   if (ret.rc != PB_Errno::SUCCESS)
     exit(0);
@@ -548,13 +549,13 @@ bool check_prev_entries(int prev_term, int prev_index){
 
 // ALERT: idx == -1 if the log is emtpy. But, it's ok in this implementation.
 void append_logs(const std::vector<entry>& logs, int idx){
-  if(logs.empty() == true) {
+  if(logs.empty()) {
     return;
   }
   // not idx is the appending entries' prev log index
   
   // conflict 
-  if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx idx + 1
+  if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx: idx + 1
       ServerStore::remove_log(idx + 1);
       raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
   }
@@ -792,7 +793,7 @@ void raft_rpc_init() {
   return;
 }
 
-void server_init() {
+void server_init(long init_timeout) {
 
   pthread_rwlock_init(&rolelock, NULL);
   pthread_rwlock_init(&raftloglock, NULL);
@@ -817,23 +818,29 @@ void server_init() {
     entry_format_print(raftLog[i]);
   }
 
-  REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-  toFollower(term);
 
+  REAL_TIMEOUT = (init_timeout > -2000 ? init_timeout : dist(gen)) + ELECTION_TIMEOUT;
+  toFollower(term);
 }
 
 
 
 int main(int argc, char** argv) {
-  if (argc != 2) {
-    std::cout << "Usage: ./server <my_node_id> " << std::endl;
+  if (argc < 2 || argc > 3) {
+    std::cout << "Usage: ./server <my_node_id> <initial timeout>" << std::endl;
     return 1;
   }
+  std::cout << "Use <initial timeout> to set which one becomes leader at start" << std::endl;
   myID = std::atoi(argv[1]);
+  long init_time_out = 0;
+  if(argc > 2){
+      init_time_out = atol(argv[2]);
+  }
+
 
   std::thread blob(start_blob_server);
   std::thread raft(start_raft_server, myID);
-  server_init();
+  server_init(init_time_out);
 
 
   blob.join();
