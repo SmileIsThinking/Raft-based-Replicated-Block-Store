@@ -180,7 +180,8 @@ void new_request(request_ret& _return, entry e, const request& req) {
   
   int reqIndex = raftLog.size() - 1;
   // if the request was not sent before, append to log
-  if (umap.find(req.clientID) != umap.end() || (umap.find(req.clientID) == umap.end() && umap.at(req.clientID) < req.seqNum)){
+  if ((umap.find(req.clientID) != umap.end() || (umap.find(req.clientID) == umap.end() && umap.at(req.clientID) < req.seqNum)) 
+  &&(umap_applied.find(req.clientID) != umap_applied.end() || (umap_applied.find(req.clientID) == umap_applied.end() && umap_applied.at(req.clientID) < req.seqNum))){
     auto it = umap.find(req.clientID);
     if( it != umap.end() ) {
         it->second = req.seqNum;
@@ -199,7 +200,6 @@ void new_request(request_ret& _return, entry e, const request& req) {
     nextIndex[myID] = reqIndex + 1;
     matchIndex[myID] = reqIndex;  
     pthread_rwlock_unlock(&raftloglock);
-
   }
   
   std::string value;
@@ -212,6 +212,13 @@ void new_request(request_ret& _return, entry e, const request& req) {
           ServerStore::write(e.address, e.content);
         }
         _return.rc = Errno::SUCCESS;
+        auto it_applied = umap_applied.find(req.clientID);
+        if( it_applied != umap_applied.end() ) {
+            it_applied->second = req.seqNum;
+        }
+        else {
+            umap_applied.insert(std::make_pair(req.clientID,req.seqNum));
+        }
         lastApplied++;
         return;        
       }

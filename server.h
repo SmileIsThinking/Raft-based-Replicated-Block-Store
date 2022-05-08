@@ -138,6 +138,7 @@ int matchIndex[NODE_NUM];
 
 // linearizable semantics
 std::unordered_map<int, int> umap;
+std::unordered_map<int, int> umap_applied; 
 
 class raft_rpcHandler : virtual public raft_rpcIf {
 public:
