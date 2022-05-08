@@ -11,14 +11,16 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/async/TConcurrentClientSyncInfo.h>
 
-
+#include <random>
 #include <thread>
 #include <iostream>
 #include <time.h>
+#include <chrono>
 
 #include "include.h"
 #include "server_store.h"
 #include <vector>
+#include "util.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -27,12 +29,17 @@ using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::server;
 
 
-#define APPEND_TIMEOUT  3 // does not receive appendEntry in timeout and convert to candidate
-#define ELECTION_TIMEOUT  10 // gap between different requestVote rpc
-#define HB_FREQ 1 // The frequency of sending appendEntries RPC in leader
+// #define APPEND_TIMEOUT  10 
+// does not receive appendEntry in timeout and convert to candidate
+#define ELECTION_TIMEOUT  3000 // gap between different requestVote rpc
+#define HB_FREQ 500 // The frequency of sending appendEntries RPC in leader
 time_t last_election;
-time_t last_append;
+// time_t last_append;
 
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
+int64_t REAL_TIMEOUT;
 
 std::string my_addr;
 int my_blob_port;

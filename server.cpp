@@ -5,7 +5,7 @@
 #include <string>
 #include <random>
 
-#include "util.h"
+
 
 
 
@@ -286,16 +286,16 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
 }
 
 void appendTimeout() {
-  std::cout << "append timeout" << std::endl;
+  std::cout << "election timeout" << std::endl;
   std::cout << "role: " << role.load() << std::endl;
   while(1) {
     // std::cout << "append timeouting" << std::endl;
     if(role.load() != 2) {
       break;
     }
-    time_t curr = time(NULL);
+    int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
-    if(curr - last_append > APPEND_TIMEOUT) {
+    if(curr - last_election > ELECTION_TIMEOUT) {
       break;
     }
   }
@@ -305,8 +305,8 @@ void appendTimeout() {
 
 void toFollower(int term) {
   std:: cout << "TO FOLLOWER !!!" << std::endl;
-  time(&last_append);
-  std::cout << "last append: " << last_append << std::endl;
+  // time(&last_election);
+  // std::cout << "last append: " << last_election << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
@@ -378,16 +378,18 @@ void toLeader() {
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
   std::cout << "Receive Reuqest Vote RPC" << std::endl;
 
+  if(requestVote.term > currentTerm.load()) {
+    std::cout << "Get larger term!" << std::endl;
+    toFollower(requestVote.term);
+  }
+
   if(requestVote.term < currentTerm.load()) {
     ret.voteGranted = false;
     ret.term = currentTerm.load();
     return;
   }
 
-  if(requestVote.term > currentTerm.load()) {
-    std::cout << "Get larger term!" << std::endl;
-    toFollower(requestVote.term);
-  }
+
   
   int vote = votedFor.load();
   std::cout << vote << std::endl;
@@ -398,14 +400,16 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
       return;
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
+      time(&last_election);
+      REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
       votedFor.store(requestVote.candidateId);   
       return;  
     } 
   }
-  std::cout << "vote " << vote << std::endl;
+  std::cout << "Myvote " << votedFor.load() << std::endl;
   ret.voteGranted = false;
   ret.term = currentTerm.load();
-  std::cout << "vote " << vote << std::endl;
+  // std::cout << "Mvote " << vote << std::endl;
   return;    
  
 }
@@ -437,6 +441,7 @@ void send_request_votes() {
   }
 
   std::cout << "Send Request Votes to others!" << std::endl;
+  // time(&last_election);
   // requestVote init
   request_vote_args requestVote;
   requestVote.term = currentTerm.load();
@@ -475,14 +480,13 @@ void send_request_votes() {
   }
 
   time(&last_election);
-
+  REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
   // random election timeout in [T, 2T] (T >> RTT)
-  srand (time(NULL));
-  int real_timeout = rand() % ELECTION_TIMEOUT + ELECTION_TIMEOUT;
+  // srand (time(NULL));
 
 
   while(1) {
-    std::cout << "My role: " << role.load() << std::endl;
+    // std::cout << "My role: " << role.load() << std::endl;
     if(role.load() == 2) {
       std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
       // std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
@@ -490,8 +494,8 @@ void send_request_votes() {
       return;
     }
     int count = 0;
-    time_t curr = time(NULL);
-    if(curr - last_election > real_timeout) {
+    int64_t curr = getMillisec();
+    if(curr - last_election > REAL_TIMEOUT) {
       break;
     }
     for(int i = 0; i < NODE_NUM; i++) {
@@ -557,12 +561,12 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
   std::cout << "Receive Append Entries RPC" << std::endl;
-
+  time(&last_election);
+  REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
   // if(entryNum > 0){
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   // }
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
-      time(&last_append);
       ret.term = currentTerm.load();
       ret.success = 0;
       return;
@@ -778,6 +782,8 @@ void server_init() {
     std::cout << "Index:  " << i << std::endl;
     entry_format_print(raftLog[i]);
   }
+
+  REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
   toFollower(term);
 
 }
@@ -846,7 +852,7 @@ int main(int argc, char** argv) {
   // if (!is_primary.load()) {
   //   while (true) {
   //     sleep(HB_FREQ);
-  //     time_t curr = time(NULL);
+  //     int64_t curr = getMillisec();
   //     if (curr - last_heartbeat > HB_FREQ * 2) {
   //       std::cout << "Primary Failure" << std::endl;
   //       is_primary.store(true);
