@@ -28,7 +28,7 @@ int64_t str_to_int(const std::string& number){
 
 int read(const int64_t address, std::string& _return){
     std::cout<<"start to read a block" <<std::endl;
-    int res = BlockStore::read(address, _return, init_leader,max_tries, sleep_time);
+    int res = BlockStore::read(address, _return, init_leader, max_tries, sleep_time);
     return res;
 }
 
@@ -36,6 +36,11 @@ int write(const int64_t address, std::string& write){
     Errno::type res = BlockStore::write(address, write, init_leader, max_tries, sleep_time);
     std::cout<<"write returned" <<std::endl;
     return res;
+}
+
+bool check_consistency(const int64_t address){
+    BlockStore::compare_blocks(address, init_leader, max_tries, sleep_time);
+    BlockStore::compare_logs(init_leader, max_tries, sleep_time);
 }
 
 void padding(std::string& string, int size){
