@@ -20,6 +20,9 @@ service blob_rpc {
     void ping(),
     request_ret read(1:i64 addr),
     request_ret write(1:i64 addr, 2:string value),
+
+    oneway void compareLogs(),
+    oneway void compareBlock(1:i64 addr),
 }
 
 enum PB_Errno {
@@ -28,19 +31,6 @@ enum PB_Errno {
     NOT_LEADER = 2,
     BACKUP_EXISTS = 3,
     UNEXPECTED = 99,
-}
-
-struct new_backup_ret {
-    1: PB_Errno rc,
-    2: string content,
-}
-
-service pb_rpc {
-    void ping(),
-    new_backup_ret new_backup(1:string hostname, 2:i32 port),
-    oneway void new_backup_succeed();
-    # PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
-    oneway void heartbeat(),
 }
 
 /* ===================================== */
@@ -76,7 +66,7 @@ struct request_vote_reply {
 struct entry {
     // 0: read, 1: write
     1: i32 command,
-    2: i32 term,   
+    2: i32 term,
     3: i64 address,
     4: string content,
 }
@@ -94,7 +84,7 @@ struct append_entries_reply {
     1: i32 term,
     2: i32 success,
     // initialized to -1
-    // 0: false
+    // 0: false (3 as false!)
     // 1: true
 }
 
@@ -104,4 +94,5 @@ service raft_rpc {
     request_vote_reply request_vote(1:request_vote_args requestVote),
     append_entries_reply append_entries(1:append_entries_args appendEntry),
     oneway void compareTest(1: list<entry> leaderLog, 2: i32 leaderTerm, 3: i32 leaderVote),
+    oneway void blockTest(1: i64 address, 2: string value),
 }

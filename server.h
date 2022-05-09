@@ -1,5 +1,4 @@
 #include "gen-cpp/blob_rpc.h"
-#include "gen-cpp/pb_rpc.h"
 #include "gen-cpp/raft_rpc.h"
 
 #include <thrift/protocol/TBinaryProtocol.h>
@@ -51,7 +50,6 @@ int64_t last_heartbeat;
 std::atomic<int> num_write_requests;
 std::atomic<bool> pending_candidate;
 std::atomic<bool> has_backup;
-::std::shared_ptr<pb_rpcIf> other = nullptr;
 ::std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> otherSyncInfo = nullptr;
 
 class blob_rpcHandler : virtual public blob_rpcIf {
@@ -66,22 +64,6 @@ public:
 
     void read(request_ret& _return, const int64_t addr);
     void write(request_ret& _return, const int64_t addr, const std::string& value);
-};
-
-class pb_rpcHandler : virtual public pb_rpcIf {
-public:
-    pb_rpcHandler() {
-        std::cout << "PB Server Started" << std::endl;
-    }
-
-    void ping() {
-        printf("%s: pb_ping\n", is_primary ? "primary" : "backup");
-    }
-
-    void new_backup(new_backup_ret& ret, const std::string& hostname, const int32_t port);
-    void new_backup_succeed();
-    // PB_Errno::type update(const int64_t addr, const std::string& value, const int64_t seq);
-    void heartbeat();
 };
 
 /* ===================================== */
