@@ -138,6 +138,20 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 }
 
 void new_request(request_ret& _return, entry e) {
+  if(e.address < 0) {
+    pthread_rwlock_rdlock(&raftloglock);
+    std::cout << "Show my log to all nodes and compare!" << std::endl;
+    for(int i = 0; i < NODE_NUM; i++) {
+      if(i == myID) {
+        continue;
+      }
+      rpcServer[i]->compareTest(raftLog, currentTerm.load(), votedFor.load());
+    }
+    pthread_rwlock_unlock(&raftloglock);
+    _return.rc = Errno::SUCCESS;
+    return;
+  }
+  
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
   ServerStore::append_log(tmpLog);
@@ -601,11 +615,11 @@ void send_appending_requests(){
       
       if(lastIndex >= nextIndex[i]) {
         // potential error
-        std::cout << "stuck here" << std::endl;
-        std::cout << "i: " << i << std::endl;
-        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
+        // std::cout << "stuck here" << std::endl;
+        // std::cout << "i: " << i << std::endl;
+        // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
-        std::cout << "stuck there" << std::endl;
+        // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 
@@ -796,6 +810,10 @@ int main(int argc, char** argv) {
   }
   std::cout << "Use <initial timeout> to set which one becomes leader at start" << std::endl;
   myID = std::atoi(argv[1]);
+  if(myID > 2 || myID < 0) {
+    std::cout << "ERROR: ID should within 0-2 " << std::endl;
+    return 1;
+  }
   long init_time_out = 0;
   if(argc > 2){
       init_time_out = atol(argv[2]);
