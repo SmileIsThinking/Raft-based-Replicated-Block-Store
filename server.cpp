@@ -116,13 +116,17 @@ void new_request(request_ret& _return, entry e) {
 }
 
 void applyToStateMachine() {
-  while (commitIndex.load() > lastApplied.load()){
-    int newApplied = lastApplied.load() + 1;
-    if (raftLog[lastApplied.load()].command == 1){
+  pthread_rwlock_wrlock(&applylock);
+  int apply = lastApplied.load();
+  while (commitIndex.load() > apply){
+    int newApplied = apply + 1;
+    if (raftLog[newApplied].command == 1){
       ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
     }
-    lastApplied.fetch_add(1);
+    apply = newApplied;
   }
+  lastApplied.store(commitIndex.load());
+  pthread_rwlock_unlock(&applylock);
   return;
 }
 
@@ -722,6 +726,7 @@ void server_init(long init_timeout) {
 
   pthread_rwlock_init(&rolelock, NULL);
   pthread_rwlock_init(&raftloglock, NULL);
+  pthread_rwlock_init(&applylock, NULL);
 
   // start storage
   ServerStore::init(myID);
