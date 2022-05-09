@@ -30,19 +30,6 @@ enum PB_Errno {
     UNEXPECTED = 99,
 }
 
-struct new_backup_ret {
-    1: PB_Errno rc,
-    2: string content,
-}
-
-service pb_rpc {
-    void ping(),
-    new_backup_ret new_backup(1:string hostname, 2:i32 port),
-    oneway void new_backup_succeed();
-    # PB_Errno update(1:i64 addr, 2:string value, 3:i64 seq),
-    oneway void heartbeat(),
-}
-
 /* ===================================== */
 /* Raft RPC  */
 /* ===================================== */
@@ -94,7 +81,7 @@ struct append_entries_reply {
     1: i32 term,
     2: i32 success,
     // initialized to -1
-    // 0: false
+    // 0: false (3 as false!)
     // 1: true
 }
 

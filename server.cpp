@@ -7,84 +7,6 @@
 
 
 
-
-
-
-void pb_rpcHandler::heartbeat() {
-  // primary receive heartbeat - unexpected behavior, ignore the result
-  if (is_primary.load())
-    return;
-  // note that the other server (primary) is still alive
-  std::cout << "Heartbeat received" << std::endl;
-  last_heartbeat = getMillisec();
-}
-
-void send_heartbeat() {
-  try {
-    while (true) {
-      sleep(HB_FREQ);
-      if (!has_backup.load())
-        break;
-      std::cout << "sending heartbeat" << std::endl;
-      other->heartbeat();
-    }
-  } catch (TTransportException) {
-    std::cerr << "Backup Failure" << std::endl;
-    has_backup.store(false);
-    pending_backup.store(false);
-  }
-}
-
-void new_backup_helper() {
-  sleep(5);
-  if (pending_backup.load()) {
-    has_backup.store(false);
-    pending_backup.store(false);
-  }
-}
-
-void pb_rpcHandler::new_backup(new_backup_ret& _return, const std::string& hostname, const int32_t port) {
-  if (!is_primary.load()) {
-    std::cerr << "new_backup: Not a Primary" << std::endl;
-    _return.rc = PB_Errno::NOT_LEADER;
-    return;
-  }
-
-  if (has_backup.load()) {
-    std::cerr << "new_backup: Backup Already Exists" << std::endl;
-    _return.rc = PB_Errno::BACKUP_EXISTS;
-    return;
-  }
-
-  std::shared_ptr<TTransport> socket(new TSocket(hostname, port));
-  std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  otherSyncInfo = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
-  other = std::make_shared<pb_rpcConcurrentClient>(protocol, otherSyncInfo);
-  transport->open();
-  other->ping();
-
-  // block future write operations
-  pending_backup.store(true);
-  // block wait for current write operations to complete
-  while (num_write_requests.load() != 0);
-  // full file read
-  ServerStore::full_read(_return.content);
-
-  std::thread(send_heartbeat).detach();
-  std::thread(new_backup_helper).detach();
-  _return.rc = PB_Errno::SUCCESS;
-  return;
-}
-
-void pb_rpcHandler::new_backup_succeed() {
-  // Allow new write requests after backup is ready
-  if (pending_backup.load()) {
-    has_backup.store(true);
-    pending_backup.store(false);
-  }
-}
-
 void start_blob_server(int id) {
   ::std::shared_ptr<blob_rpcHandler> handler(new blob_rpcHandler());
   ::std::shared_ptr<TProcessor> processor(new blob_rpcProcessor(handler));
@@ -138,6 +60,20 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 }
 
 void new_request(request_ret& _return, entry e) {
+  if(e.address < 0) {
+    pthread_rwlock_rdlock(&raftloglock);
+    std::cout << "Show my log to all nodes and compare!" << std::endl;
+    for(int i = 0; i < NODE_NUM; i++) {
+      if(i == myID) {
+        continue;
+      }
+      rpcServer[i]->compareTest(raftLog, currentTerm.load(), votedFor.load());
+    }
+    pthread_rwlock_unlock(&raftloglock);
+    _return.rc = Errno::SUCCESS;
+    return;
+  }
+
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
   ServerStore::append_log(tmpLog);
@@ -152,15 +88,15 @@ void new_request(request_ret& _return, entry e) {
 
   std::string value;
   while(1) {
-    if(commitIndex >= reqIndex) {
-      if(lastApplied == reqIndex - 1){
+    if(commitIndex.load() >= reqIndex) {
+      if(lastApplied.load() == reqIndex - 1){
         if(e.command == 0) {
           ServerStore::read(e.address, _return.value);
         }else if(e.command == 1) {
           ServerStore::write(e.address, e.content);
         }
         _return.rc = Errno::SUCCESS;
-        lastApplied++;
+        lastApplied.fetch_add(1);
         return;        
       }
     }
@@ -168,12 +104,12 @@ void new_request(request_ret& _return, entry e) {
 }
 
 void applyToStateMachine() {
-  while (commitIndex > lastApplied){
-    int newApplied = lastApplied + 1;
-    if (raftLog[lastApplied].command == 1){
+  while (commitIndex.load() > lastApplied.load()){
+    int newApplied = lastApplied.load() + 1;
+    if (raftLog[lastApplied.load()].command == 1){
       ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
     }
-    lastApplied++;
+    lastApplied.fetch_add(1);
   }
   return;
 }
@@ -530,8 +466,9 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   leaderID.store(appendEntries.leaderId);
 
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-  if(commitIndex < appendEntries.leaderCommit){
-    commitIndex = std::min(appendEntries.leaderCommit, (int)raftLog.size()-1);
+  if(commitIndex.load() < appendEntries.leaderCommit){
+    commitIndex.store(std::min(appendEntries.leaderCommit, (int)raftLog.size()-1));
+    applyToStateMachine();
   }
   
   ret.success = 1;
@@ -580,7 +517,7 @@ void send_appending_requests(){
     append_entries_args preEntry;
     preEntry.term = currentTerm.load();
     preEntry.leaderId = myID;
-    preEntry.leaderCommit = commitIndex;    
+    preEntry.leaderCommit = commitIndex.load();    
     preEntry.entries = std::vector<entry>();
 
     // learn a lesson
@@ -601,11 +538,11 @@ void send_appending_requests(){
       
       if(lastIndex >= nextIndex[i]) {
         // potential error
-        std::cout << "stuck here" << std::endl;
-        std::cout << "i: " << i << std::endl;
-        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
+        // std::cout << "stuck here" << std::endl;
+        // std::cout << "i: " << i << std::endl;
+        // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
-        std::cout << "stuck there" << std::endl;
+        // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 
@@ -677,7 +614,7 @@ void send_appending_requests(){
       }
     }
     // std::cout << "Ready to Commit!" << std::endl;
-    int N = commitIndex;
+    int N = commitIndex.load();
     while(1) {
       N++;
       if(N > lastIndex) {
@@ -692,7 +629,7 @@ void send_appending_requests(){
       }
 
       if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
-        commitIndex = N;
+        commitIndex.store(N);
       }else {
         break;
       }
@@ -773,8 +710,8 @@ void server_init(long init_timeout) {
   }
   raftLog = ServerStore::read_full_log();
   
-  commitIndex = -1;
-  lastApplied = -1;
+  commitIndex.store(-1);
+  lastApplied.store(-1);
   leaderID.store(-1);
   raft_rpc_init();
   for(int i = 0; i < (int)raftLog.size(); i++) {
@@ -796,6 +733,10 @@ int main(int argc, char** argv) {
   }
   std::cout << "Use <initial timeout> to set which one becomes leader at start" << std::endl;
   myID = std::atoi(argv[1]);
+  if(myID > 2 || myID < 0) {
+    std::cout << "ERROR: ID should within 0-2 " << std::endl;
+    return 1;
+  }
   long init_time_out = 0;
   if(argc > 2){
       init_time_out = atol(argv[2]);
