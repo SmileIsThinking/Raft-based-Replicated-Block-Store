@@ -130,8 +130,8 @@ std::vector<entry> raftLog = {};  // log index starts from 0!!!
 
 
 /* Volatile State on all servers */
-int commitIndex; // init from 0
-int lastApplied; 
+std::atomic<int> commitIndex; // init from -1
+std::atomic<int> lastApplied; 
 
 
 /* Volatile State on leaders */

@@ -151,7 +151,7 @@ void new_request(request_ret& _return, entry e) {
     _return.rc = Errno::SUCCESS;
     return;
   }
-  
+
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
   ServerStore::append_log(tmpLog);
@@ -166,15 +166,15 @@ void new_request(request_ret& _return, entry e) {
 
   std::string value;
   while(1) {
-    if(commitIndex >= reqIndex) {
-      if(lastApplied == reqIndex - 1){
+    if(commitIndex.load() >= reqIndex) {
+      if(lastApplied.load() == reqIndex - 1){
         if(e.command == 0) {
           ServerStore::read(e.address, _return.value);
         }else if(e.command == 1) {
           ServerStore::write(e.address, e.content);
         }
         _return.rc = Errno::SUCCESS;
-        lastApplied++;
+        lastApplied.fetch_add(1);
         return;        
       }
     }
@@ -182,12 +182,12 @@ void new_request(request_ret& _return, entry e) {
 }
 
 void applyToStateMachine() {
-  while (commitIndex > lastApplied){
-    int newApplied = lastApplied + 1;
-    if (raftLog[lastApplied].command == 1){
+  while (commitIndex.load() > lastApplied.load()){
+    int newApplied = lastApplied.load() + 1;
+    if (raftLog[lastApplied.load()].command == 1){
       ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
     }
-    lastApplied++;
+    lastApplied.fetch_add(1);
   }
   return;
 }
@@ -544,8 +544,9 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   leaderID.store(appendEntries.leaderId);
 
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
-  if(commitIndex < appendEntries.leaderCommit){
-    commitIndex = std::min(appendEntries.leaderCommit, (int)raftLog.size()-1);
+  if(commitIndex.load() < appendEntries.leaderCommit){
+    commitIndex.store(std::min(appendEntries.leaderCommit, (int)raftLog.size()-1));
+    applyToStateMachine();
   }
   
   ret.success = 1;
@@ -594,7 +595,7 @@ void send_appending_requests(){
     append_entries_args preEntry;
     preEntry.term = currentTerm.load();
     preEntry.leaderId = myID;
-    preEntry.leaderCommit = commitIndex;    
+    preEntry.leaderCommit = commitIndex.load();    
     preEntry.entries = std::vector<entry>();
 
     // learn a lesson
@@ -691,7 +692,7 @@ void send_appending_requests(){
       }
     }
     // std::cout << "Ready to Commit!" << std::endl;
-    int N = commitIndex;
+    int N = commitIndex.load();
     while(1) {
       N++;
       if(N > lastIndex) {
@@ -706,7 +707,7 @@ void send_appending_requests(){
       }
 
       if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
-        commitIndex = N;
+        commitIndex.store(N);
       }else {
         break;
       }
@@ -787,8 +788,8 @@ void server_init(long init_timeout) {
   }
   raftLog = ServerStore::read_full_log();
   
-  commitIndex = -1;
-  lastApplied = -1;
+  commitIndex.store(-1);
+  lastApplied.store(-1);
   leaderID.store(-1);
   raft_rpc_init();
   for(int i = 0; i < (int)raftLog.size(); i++) {
