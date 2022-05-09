@@ -116,9 +116,13 @@ void new_request(request_ret& _return, entry e) {
       bool overlap = false;
       int64_t thisAddr = e.address;
       for(int i = lastApplied.load() + 1; i < reqIndex; i++) {
-        overlap = ifOverlap(thisAddr, raftLog[i].address);
-        if(overlap == true){
-          break;
+        if(raftLog[i].command == 0) {
+          overlap = false;
+        }else {
+          overlap = ifOverlap(thisAddr, raftLog[i].address);
+          if(overlap == true){
+            break;
+          }
         }
       }
       if(overlap == false) {
