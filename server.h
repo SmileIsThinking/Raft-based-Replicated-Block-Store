@@ -34,7 +34,6 @@ using namespace ::apache::thrift::server;
 #define HB_FREQ 2000 // The frequency of sending appendEntries RPC in leader
 int64_t last_election;
 int64_t REAL_TIMEOUT;
-// time_t last_append;
 
 std::random_device rd;
 std::mt19937 gen(rd());
@@ -42,15 +41,14 @@ std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 
 std::string my_addr;
 
-std::atomic<bool> pending_backup;
+// std::atomic<bool> pending_backup;
 std::atomic<bool> is_primary;
-std::atomic<bool> is_leader;
+// std::atomic<bool> is_leader;
 int64_t last_heartbeat;
 // assuming single backup
 std::atomic<int> num_write_requests;
 std::atomic<bool> pending_candidate;
-std::atomic<bool> has_backup;
-::std::shared_ptr<::apache::thrift::async::TConcurrentClientSyncInfo> otherSyncInfo = nullptr;
+
 
 class blob_rpcHandler : virtual public blob_rpcIf {
 public:
@@ -64,6 +62,9 @@ public:
 
     void read(request_ret& _return, const int64_t addr);
     void write(request_ret& _return, const int64_t addr, const std::string& value);
+
+    void compareLogs();
+    void compareBlock(const int64_t addr);
 };
 
 /* ===================================== */
@@ -89,21 +90,6 @@ pthread_rwlock_t raftloglock;
 /* ===================================== */
 /* Persistent State */
 
-
-// typedef struct logEntry_ {
-//     int commmand;
-//     int term;
-// }logEntry;
-
-// typedef struct persistStates_ {
-//     std::atomic<int> currentTerm{0};   // init to 0
-//     std::atomic<int> votedFor{-1};  // init to -1
-//     std::atomic<int entryNum = 0;
-//     std::vector<entry> raftLog;
-// }persistStates;
-
-// persistStates pStates;
-
 std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
 // std::atomic<int> entryNum{0};  
@@ -112,8 +98,8 @@ std::vector<entry> raftLog = {};  // log index starts from 0!!!
 
 
 /* Volatile State on all servers */
-int commitIndex; // init from 0
-int lastApplied; 
+std::atomic<int> commitIndex; // init from -1
+std::atomic<int> lastApplied; 
 
 
 /* Volatile State on leaders */
@@ -132,7 +118,9 @@ public:
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 
-    void compareTest(const std::vector<entry> & leaderLog, const int32_t leaderTerm, const int32_t leaderVote);
+    void compareTest(const std::vector<entry> & leaderLog, \
+    const int32_t leaderTerm, const int32_t leaderVote);
+    void blockTest(const int64_t address, const std::string& value);
 };
 
 void new_request(request_ret& _return, entry e);
