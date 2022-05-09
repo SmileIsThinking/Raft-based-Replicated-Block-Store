@@ -5,3 +5,13 @@ server
 .idea/
 .vscode/
 /Test Crash Consistency/
+testlog/
+LOG_NUM0
+LOG_NUM1
+LOG_NUM2
+LOG0
+LOG1
+LOG2
+STATE0
+STATE1
+STATE2

@@ -693,6 +693,7 @@ void send_appending_requests(){
 
       if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
         commitIndex = N;
+        std::cout << "commitIndex :" << commitIndex << std::endl;
       }else {
         break;
       }
