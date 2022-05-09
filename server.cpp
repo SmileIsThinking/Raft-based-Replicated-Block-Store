@@ -130,6 +130,7 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   raftEntry.address = addr;
   raftEntry.term = currentTerm.load();
 
+  std::cout << "read(" << addr << ", term: " << raftEntry.term << ")" << std::endl;
   new_request(_return, raftEntry);
   return;
 
@@ -147,8 +148,11 @@ void new_request(request_ret& _return, entry e) {
   int reqIndex = raftLog.size() - 1;
 
   nextIndex[myID] = reqIndex + 1;
-  matchIndex[myID] = reqIndex;  
+  matchIndex[myID] = reqIndex;
+  std::cout << "new_request(" << reqIndex << ", commit idx: " << commitIndex << ")" << std::endl;
   pthread_rwlock_unlock(&raftloglock);
+  std::cout << "new_request(" << reqIndex << ", commit idx: " << commitIndex
+  << ", applied idx: " << lastApplied <<")" << std::endl;
 
   std::string value;
   while(1) {
@@ -199,6 +203,7 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
   raftEntry.content = value;
   raftEntry.term = currentTerm.load();
 
+  std::cout << "write(" << addr << ", term: " << raftEntry.term << "val: " <<raftEntry.content.substr(0, 10)<< ")" << std::endl;
   new_request(_return, raftEntry);
   return;  
 }
@@ -526,14 +531,16 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   if(role.load() == 1) {
     toFollower(appendEntries.term);
   }
- 
+  std::cout << "start append_logs" << std::endl;
   leaderID.store(appendEntries.leaderId);
 
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
+  std::cout << "end append_logs" << std::endl;
+  //todo: question when are we going to commit? are write to block store
   if(commitIndex < appendEntries.leaderCommit){
     commitIndex = std::min(appendEntries.leaderCommit, (int)raftLog.size()-1);
   }
-  
+  std::cout << "end commitIndex: " << commitIndex << std::endl;
   ret.success = 1;
   ret.term = currentTerm.load();
   return;
@@ -601,11 +608,11 @@ void send_appending_requests(){
       
       if(lastIndex >= nextIndex[i]) {
         // potential error
-        std::cout << "stuck here" << std::endl;
-        std::cout << "i: " << i << std::endl;
-        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
+//        std::cout << "stuck here" << std::endl;
+//        std::cout << "i: " << i << std::endl;
+//        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
-        std::cout << "stuck there" << std::endl;
+//        std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 

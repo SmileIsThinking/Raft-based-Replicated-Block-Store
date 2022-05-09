@@ -11,6 +11,8 @@ int log_fd = -1;
 int log_num_fd = -1;
 int state_fd = -1;
 
+int curr_id = -1;
+
 int curr_seq = 0;
 
 const int entrySize = 2 * sizeof(int32_t) + sizeof(int64_t) + BLOCK_SIZE;
@@ -32,6 +34,7 @@ bool is_empty(std::ifstream& pFile)
 }
 
 int ServerStore::init(int node_id) {
+    curr_id = node_id;
     pthread_rwlock_init(&rwlock, NULL);
     mode_t mode = S_IRUSR | S_IWUSR;
     std::string filename = STORE + std::to_string(node_id);
@@ -173,7 +176,7 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     for(auto logEntry: logEntries) {
         logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
         logOut.write(reinterpret_cast<const char *>(&logEntry.term), sizeof(logEntry.term));
-        logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));\
+        logOut.write(reinterpret_cast<const char *>(&logEntry.address), sizeof(logEntry.address));
         if (logEntry.command == 0)  {
             logOut.write(s.c_str(), BLOCK_SIZE);
         }else {
@@ -184,6 +187,7 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     // IMPORTANT: keep consistency
     // write log entry first, log num second
     int num = read_log_num() + (int) logEntries.size();
+    std::cout << "Server Store start write sth: num=" << num << std::endl;
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
@@ -268,9 +272,12 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
     }
     // std::cout << "lock ends" << std::endl;
     std::string s = std::to_string(currentTerm) + " " + std::to_string(votedFor);
-    std::cout << "Server Store write states: " << std::to_string(votedFor)<< std::endl;
+    std::cout << "Server Store write states: " << votedFor << std::endl;
     int len = (int) s.size();
-    pwrite(state_fd, s.c_str(), len, 0);
+//    pwrite(state_fd, s.c_str(), len, 0);
+    std::ofstream state_file(STATE+std::to_string(curr_id),std::ofstream::trunc);
+    state_file << s;
+    state_file.close();
     pthread_rwlock_unlock(&statelock);
 
     return 0;
