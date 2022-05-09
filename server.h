@@ -62,6 +62,9 @@ public:
 
     void read(request_ret& _return, const int64_t addr);
     void write(request_ret& _return, const int64_t addr, const std::string& value);
+
+    void compareLogs();
+    void compareBlock(const int64_t addr);
 };
 
 /* ===================================== */
@@ -115,7 +118,9 @@ public:
     void request_vote(request_vote_reply& ret, const request_vote_args& requestVote);
     void append_entries(append_entries_reply& ret, const append_entries_args& appendEntries);
 
-    void compareTest(const std::vector<entry> & leaderLog, const int32_t leaderTerm, const int32_t leaderVote);
+    void compareTest(const std::vector<entry> & leaderLog, \
+    const int32_t leaderTerm, const int32_t leaderVote);
+    void blockTest(const int64_t address, const std::string& value);
 };
 
 void new_request(request_ret& _return, entry e);

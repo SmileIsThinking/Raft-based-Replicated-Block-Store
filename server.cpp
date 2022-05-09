@@ -23,6 +23,32 @@ void start_blob_server(int id) {
   blob_server.serve();
 }
 
+void blob_rpcHandler::compareLogs() {
+  pthread_rwlock_rdlock(&raftloglock);
+  std::cout << "Show my log to all nodes and compare!" << std::endl;
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
+    rpcServer[i]->compareTest(raftLog, currentTerm.load(), votedFor.load());
+  }
+  pthread_rwlock_unlock(&raftloglock);
+
+  return;
+}
+
+void blob_rpcHandler::compareBlock(const int64_t addr) {
+  std::string value;
+  ServerStore::read(addr, value);
+  for(int i = 0; i < NODE_NUM; i++) {
+    if(i == myID) {
+      continue;
+    }
+    rpcServer[i]->blockTest(addr, value);
+  }
+  return;
+}
+
 /* ===================================== */
 /* Raft Implementation  */
 /* ===================================== */
@@ -60,20 +86,6 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 }
 
 void new_request(request_ret& _return, entry e) {
-  if(e.address < 0) {
-    pthread_rwlock_rdlock(&raftloglock);
-    std::cout << "Show my log to all nodes and compare!" << std::endl;
-    for(int i = 0; i < NODE_NUM; i++) {
-      if(i == myID) {
-        continue;
-      }
-      rpcServer[i]->compareTest(raftLog, currentTerm.load(), votedFor.load());
-    }
-    pthread_rwlock_unlock(&raftloglock);
-    _return.rc = Errno::SUCCESS;
-    return;
-  }
-
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
   ServerStore::append_log(tmpLog);
@@ -246,8 +258,6 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     return;
   }
 
-
-  
   int vote = votedFor.load();
   std::cout << vote << std::endl;
   if(vote == -1 || vote == requestVote.candidateId) {
@@ -504,6 +514,22 @@ void raft_rpcHandler::compareTest(const std::vector<entry> & leaderLog, \
 
   std::cout << "===============================================" << std::endl;
 }
+
+void raft_rpcHandler::blockTest(const int64_t address, const std::string& value) {
+  std::string myValue;
+  ServerStore::read(address, myValue);
+  std::cout << "===============Block Value Test====================" << std::endl;
+  std::cout << "The address is: " << address << std::endl;
+  if(myValue == value) {
+    std::cout << "the block content in leader and follower " << myID <<  " are same." << std::endl;
+  } else {
+    std::cerr << "the block content in leader and follower " << myID <<  " are different." << std::endl;
+  }
+  std::cout << "===================================================" << std::endl;
+}
+
+
+
 
 void send_appending_requests(){  
     if(role.load() != 0) {
