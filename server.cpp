@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string>
 #include <random>
-
+#include <set>
 
 
 void start_blob_server(int id) {
@@ -85,6 +85,17 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // return;
 }
 
+bool ifOverlap(int64_t addr1, int64_t addr2) {
+  int64_t diff = addr1 - addr2;
+  if(diff < BLOCK_SIZE && diff > -1 * BLOCK_SIZE) {
+    // is overlap
+    return true;
+  }else {
+    // non-overlap
+    return false;
+  }
+}
+
 void new_request(request_ret& _return, entry e) {
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
@@ -101,28 +112,61 @@ void new_request(request_ret& _return, entry e) {
   std::string value;
   while(1) {
     if(commitIndex.load() >= reqIndex) {
-      if(lastApplied.load() == reqIndex - 1){
+      // check overlap
+      bool overlap = false;
+      int64_t thisAddr = e.address;
+      for(int i = lastApplied.load() + 1; i < reqIndex; i++) {
+        overlap = ifOverlap(thisAddr, raftLog[i].address);
+        if(overlap == true){
+          break;
+        }
+      }
+      if(overlap == false) {
         if(e.command == 0) {
           ServerStore::read(e.address, _return.value);
         }else if(e.command == 1) {
           ServerStore::write(e.address, e.content);
-        }
+        }     
         _return.rc = Errno::SUCCESS;
-        lastApplied.fetch_add(1);
-        return;        
+        appliedIndex.insert(reqIndex);
+        return;
+
+      }else{
+        if(lastApplied.load() == reqIndex - 1){
+          if(e.command == 0) {
+            ServerStore::read(e.address, _return.value);
+          }else if(e.command == 1) {
+            ServerStore::write(e.address, e.content);
+          }
+          _return.rc = Errno::SUCCESS;
+          appliedIndex.insert(reqIndex);
+          pthread_rwlock_wrlock(&applylock);
+          while(1) {
+            if(appliedIndex.count(lastApplied.load() + 1) > 0) {
+              lastApplied.fetch_add(1);
+            }else {
+              break;
+            }
+          }
+          pthread_rwlock_unlock(&applylock);
+          return;        
+        }
       }
+
     }
   }
 }
 
 void applyToStateMachine() {
-  while (commitIndex.load() > lastApplied.load()){
-    int newApplied = lastApplied.load() + 1;
-    if (raftLog[lastApplied.load()].command == 1){
+  int apply = lastApplied.load();
+  while (commitIndex.load() > apply){
+    int newApplied = apply + 1;
+    if (raftLog[apply].command == 1){
       ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
     }
-    lastApplied.fetch_add(1);
+    apply = newApplied;
   }
+  lastApplied.store(commitIndex.load());
   return;
 }
 
@@ -722,7 +766,7 @@ void server_init(long init_timeout) {
 
   pthread_rwlock_init(&rolelock, NULL);
   pthread_rwlock_init(&raftloglock, NULL);
-
+  pthread_rwlock_init(&applylock, NULL);
   // start storage
   ServerStore::init(myID);
   leaderID.store(-1);
