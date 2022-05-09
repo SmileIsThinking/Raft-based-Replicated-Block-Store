@@ -12,8 +12,8 @@ int main(int argc, char** argv){
     e.term = 2;
     logEntries.emplace_back(e);
 
-    e.term = 4;
-    logEntries.emplace_back(e);
+    // e.term = 4;
+    // logEntries.emplace_back(e);
 
 
     ServerStore::append_log(logEntries);

@@ -7,12 +7,12 @@ int main(int argc, char** argv){
   
     e.term = 1;
     logEntries.emplace_back(e);
-    logEntries.emplace_back(e);
+    // logEntries.emplace_back(e);
    
-    e.term = 3;
-    logEntries.emplace_back(e);
-    logEntries.emplace_back(e);
-    logEntries.emplace_back(e);
+    // e.term = 3;
+    // logEntries.emplace_back(e);
+    // logEntries.emplace_back(e);
+    // logEntries.emplace_back(e);
 
 
     ServerStore::append_log(logEntries);
