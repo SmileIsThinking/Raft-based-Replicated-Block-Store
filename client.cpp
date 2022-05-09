@@ -41,6 +41,7 @@ int write(const int64_t address, std::string& write){
 bool check_consistency(const int64_t address){
     BlockStore::compare_blocks(address, init_leader, max_tries, sleep_time);
     BlockStore::compare_logs(init_leader, max_tries, sleep_time);
+    return true;
 }
 
 void padding(std::string& string, int size){
@@ -99,7 +100,8 @@ void shell(){
                     perror("write() returned ");
                     std::cout << std::endl;
                 }
-            } else if (input == "pwrite") {
+            } else if (input == "check") {
+                check_consistency(init_leader);
             }  else if (input != "quit"){
                 std::cout << "\nCommand Not Recognized\n";
             }
