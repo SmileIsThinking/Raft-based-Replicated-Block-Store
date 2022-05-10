@@ -15,8 +15,5 @@ client: thrift client.cpp block_store.cpp block_store.h
 thrift: rpc.thrift
 	thrift --gen cpp rpc.thrift
 
-rmlog:
-	rm -rf LOG* STATE* BLOCK*
-
 clean:
 	rm -rf gen-cpp/ server client
