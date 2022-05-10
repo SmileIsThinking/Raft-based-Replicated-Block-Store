@@ -169,6 +169,8 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
         std::cout << "STATE LOCK ERROR!" << std::endl;
         return -1;
     }
+    int pos = read_log_num() * entrySize;
+    logOut.seekp(pos);
 
     for(auto logEntry: logEntries) {
         logOut.write(reinterpret_cast<const char *>(&logEntry.command), sizeof(logEntry.command));
