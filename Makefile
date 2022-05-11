@@ -17,3 +17,6 @@ thrift: rpc.thrift
 
 clean:
 	rm -rf gen-cpp/ server client
+
+remove:
+	rm -rf BLOCK_STORE0 LOG_NUM0 LOG0 STATE0 BLOCK_STORE1 LOG_NUM1 LOG1 STATE1 BLOCK_STORE2 LOG_NUM2 LOG2 STATE2

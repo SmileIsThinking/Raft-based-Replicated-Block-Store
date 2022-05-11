@@ -66,6 +66,7 @@ int ServerStore::init(int node_id) {
 
     struct stat fileStat;
     fstat(log_num_fd, &fileStat);
+    std::cout << "initial size " << fileStat.st_size << std::endl;
     if(fileStat.st_size == 0) {
          std::string s = std::to_string(0);
         int len = s.size();
@@ -186,8 +187,10 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     // IMPORTANT: keep consistency
     // write log entry first, log num second
     int num = read_log_num() + (int) logEntries.size();
+    
     std::string ss = std::to_string(num);
     int len = ss.size();
+    std::cout << " log num " << logEntries.size() << " log_num_fd " << read_log_num() << std::endl;
     pwrite(log_num_fd, ss.c_str(), len, 0);
 
     // unlock
@@ -229,7 +232,9 @@ int ServerStore::read_log_num() {
 
     fstat(log_num_fd, &fileStat);
     char* buf = new char[fileStat.st_size + 1];
-    pread(log_num_fd, buf, fileStat.st_size + 1, 0);  
+    
+    pread(log_num_fd, buf, fileStat.st_size + 1, 0); 
+    std::cout << "modified size " << fileStat.st_size << " buf " << buf << std::endl; 
     return (int) strtol(buf,NULL,10); //atoi(buf);
 }
 
