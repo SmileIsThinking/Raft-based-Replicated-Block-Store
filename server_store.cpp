@@ -185,7 +185,9 @@ int ServerStore::append_log(const std::vector<entry>& logEntries) {
     
     // IMPORTANT: keep consistency
     // write log entry first, log num second
+    std::cout << "log entry size: " << (int) logEntries.size() << std::endl;
     int num = read_log_num() + (int) logEntries.size();
+    std::cout << "new num: " << num << std::endl;
     std::string ss = std::to_string(num);
     int len = ss.size();
     pwrite(log_num_fd, ss.c_str(), len, 0);
