@@ -166,7 +166,7 @@ void appendTimeout() {
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
-      std::cout << "election timeout" << std::endl;
+      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
       break;
     }
   }
@@ -485,6 +485,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
   if(commitIndex.load() < appendEntries.leaderCommit){
     commitIndex.store(std::min(appendEntries.leaderCommit, (int)raftLog.size()-1));
+      std::cout << "line481 commitidx load = " << commitIndex.load() << std::endl;
     applyToStateMachine();
   }
   
@@ -792,32 +793,6 @@ int main(int argc, char** argv) {
   blob.join();
   raft.join();
   std::cout << "why terminate" << std::endl;
-  // sleep(10);
-  // std::string t;
-  // std::cout << "Input terminate if you want to terminate" << std::endl;
-  // std::cin.ignore();
-
-  // raft_rpc_init();
-  // log store test
-
-  // std::vector<entry> logEntries;
-  // entry logEntry;
-  // logEntry.command = 1;
-  // logEntry.term = 2;
-  // logEntry.address = 333;
-  // stringGenerator(logEntry.content, BLOCK_SIZE);
-
-  // logEntries.emplace_back(logEntry);
-
-  // entry_format_print(logEntry);
-  // // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
-  // ServerStore::append_log(logEntries);
-
-  // logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
-  // std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
-  // entry_format_print(logEntry);
-
-
   return 0;
 }
 

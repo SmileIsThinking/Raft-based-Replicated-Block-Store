@@ -84,7 +84,7 @@ struct append_entries_reply {
     1: i32 term,
     2: i32 success,
     // initialized to -1
-    // 0: false (3 as false!)
+    // 0: false
     // 1: true
 }
 
