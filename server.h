@@ -39,6 +39,8 @@ std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 
+
+pthread_rwlock_t applylock;
 std::string my_addr;
 
 // std::atomic<bool> pending_backup;

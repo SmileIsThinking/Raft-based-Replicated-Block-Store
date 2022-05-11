@@ -116,13 +116,17 @@ void new_request(request_ret& _return, entry e) {
 }
 
 void applyToStateMachine() {
-  while (commitIndex.load() > lastApplied.load()){
-    int newApplied = lastApplied.load() + 1;
-    if (raftLog[lastApplied.load()].command == 1){
+  pthread_rwlock_wrlock(&applylock);
+  int apply = lastApplied.load();
+  while (commitIndex.load() > apply){
+    int newApplied = apply + 1;
+    if (raftLog[newApplied].command == 1){
       ServerStore::write(raftLog[newApplied].address, raftLog[newApplied].content);
     }
-    lastApplied.fetch_add(1);
+    apply = newApplied;
   }
+  lastApplied.store(commitIndex.load());
+  pthread_rwlock_unlock(&applylock);
   return;
 }
 
@@ -423,6 +427,8 @@ void append_logs(const std::vector<entry>& logs, int idx){
       raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
   }
 
+  std::cout << "Append log!!" << std::endl;
+  std::cout << "size " << logs.size() << std::endl;
   ServerStore::append_log(logs);
 
   pthread_rwlock_wrlock(&raftloglock);
@@ -471,6 +477,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   // not a leader and not a follower
   if(role.load() == 1) {
     toFollower(appendEntries.term);
+    return;
   }
  
   leaderID.store(appendEntries.leaderId);
@@ -566,9 +573,12 @@ void send_appending_requests(){
       if(lastIndex >= nextIndex[i]) {
         // potential error
         // std::cout << "stuck here" << std::endl;
-        // std::cout << "i: " << i << std::endl;
+        std::cout << "i: " << i << std::endl;
         // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
+        std::cout << "append entry size " << appendEntry[i].entries.size();
+        std::cout << "lastIndex " << lastIndex << std::endl;
+        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
@@ -614,7 +624,10 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
 
+          std::cout << "i: " << std::endl;
+          std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
+          std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
@@ -624,13 +637,14 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
-          // nextIndex[i] = nextIndex[i] - 1;
+          std::cout << "nextIndex decrease" << std::endl;
+          nextIndex[i] = nextIndex[i] - 1;
           // std::cout << "i " << i << std::endl;
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
           // ugly fix. but works
-          if(nextIndex[i] < 0) {
-            nextIndex[i] = 0;
-          }
+          // if(nextIndex[i] < 0) {
+          //   nextIndex[i] = 0;
+          // }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
@@ -723,6 +737,7 @@ void server_init(long init_timeout) {
 
   pthread_rwlock_init(&rolelock, NULL);
   pthread_rwlock_init(&raftloglock, NULL);
+  pthread_rwlock_init(&applylock, NULL);
 
   // start storage
   ServerStore::init(myID);
