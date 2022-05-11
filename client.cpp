@@ -14,6 +14,7 @@
 #include <cstring>
 #include "block_store.h"
 #include "ClientState.h"
+#include "util.h"
 
 int max_tries = 6;
 int sleep_time = 1;
@@ -28,7 +29,7 @@ int64_t str_to_int(const std::string& number){
 
 int read(const int64_t address, std::string& _return){
     std::cout<<"start to read a block" <<std::endl;
-    int res = BlockStore::read(address, _return, init_leader,max_tries, sleep_time);
+    int res = BlockStore::read(address, _return, init_leader, max_tries, sleep_time);
     return res;
 }
 
@@ -36,6 +37,12 @@ int write(const int64_t address, std::string& write){
     Errno::type res = BlockStore::write(address, write, init_leader, max_tries, sleep_time);
     std::cout<<"write returned" <<std::endl;
     return res;
+}
+
+bool check_consistency(const int64_t address){
+    BlockStore::compare_blocks(address, init_leader, max_tries, sleep_time);
+    BlockStore::compare_logs(init_leader, max_tries, sleep_time);
+    return true;
 }
 
 void padding(std::string& string, int size){
@@ -94,7 +101,8 @@ void shell(){
                     perror("write() returned ");
                     std::cout << std::endl;
                 }
-            } else if (input == "pwrite") {
+            } else if (input == "check") {
+                check_consistency(init_leader);
             }  else if (input != "quit"){
                 std::cout << "\nCommand Not Recognized\n";
             }
@@ -113,14 +121,15 @@ int main(int argc, char** argv) {
         max_tries = std::stoi(argv[1]);
         sleep_time = std::stoi(argv[2]);
     }
-    std::string s = "1234";
-    std::cout<<"client start" <<std::endl;
-    padding(s, 4096);
-    std::cout<<"size of the string: "<<s.size()<<std::endl;
+    std::string s;
+    stringGenerator(s, 4096);
+    // std::cout<<"client start" <<std::endl;
+    // padding(s, 4096);
+    // std::cout<<"size of the string: "<<s.size()<<std::endl;
     write(0, s);
-    std::string read_val;
-    read(0, read_val);
-    std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
-    shell();
+    // std::string read_val;
+    // read(0, read_val);
+    // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
+    // shell();
     return 0;
 }

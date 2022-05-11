@@ -166,7 +166,7 @@ void appendTimeout() {
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
-      std::cout << "election timeout" << std::endl;
+      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
       break;
     }
   }
@@ -427,6 +427,8 @@ void append_logs(const std::vector<entry>& logs, int idx){
       raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
   }
 
+  std::cout << "Append log!!" << std::endl;
+  std::cout << "size " << logs.size() << std::endl;
   ServerStore::append_log(logs);
 
   pthread_rwlock_wrlock(&raftloglock);
@@ -475,6 +477,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   // not a leader and not a follower
   if(role.load() == 1) {
     toFollower(appendEntries.term);
+    return;
   }
  
   leaderID.store(appendEntries.leaderId);
@@ -482,6 +485,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
   if(commitIndex.load() < appendEntries.leaderCommit){
     commitIndex.store(std::min(appendEntries.leaderCommit, (int)raftLog.size()-1));
+      std::cout << "line481 commitidx load = " << commitIndex.load() << std::endl;
     applyToStateMachine();
   }
   
@@ -569,9 +573,12 @@ void send_appending_requests(){
       if(lastIndex >= nextIndex[i]) {
         // potential error
         // std::cout << "stuck here" << std::endl;
-        // std::cout << "i: " << i << std::endl;
+        std::cout << "i: " << i << std::endl;
         // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
+        std::cout << "append entry size " << appendEntry[i].entries.size();
+        std::cout << "lastIndex " << lastIndex << std::endl;
+        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
@@ -617,7 +624,10 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
 
+          std::cout << "i: " << std::endl;
+          std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
+          std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
@@ -627,13 +637,14 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
-          // nextIndex[i] = nextIndex[i] - 1;
+          std::cout << "nextIndex decrease" << std::endl;
+          nextIndex[i] = nextIndex[i] - 1;
           // std::cout << "i " << i << std::endl;
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
           // ugly fix. but works
-          if(nextIndex[i] < 0) {
-            nextIndex[i] = 0;
-          }
+          // if(nextIndex[i] < 0) {
+          //   nextIndex[i] = 0;
+          // }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
@@ -782,32 +793,6 @@ int main(int argc, char** argv) {
   blob.join();
   raft.join();
   std::cout << "why terminate" << std::endl;
-  // sleep(10);
-  // std::string t;
-  // std::cout << "Input terminate if you want to terminate" << std::endl;
-  // std::cin.ignore();
-
-  // raft_rpc_init();
-  // log store test
-
-  // std::vector<entry> logEntries;
-  // entry logEntry;
-  // logEntry.command = 1;
-  // logEntry.term = 2;
-  // logEntry.address = 333;
-  // stringGenerator(logEntry.content, BLOCK_SIZE);
-
-  // logEntries.emplace_back(logEntry);
-
-  // entry_format_print(logEntry);
-  // // std::cout << "Log num: " << ServerStore::read_log_num() << std::endl;
-  // ServerStore::append_log(logEntries);
-
-  // logEntry = ServerStore::read_log(ServerStore::read_log_num()-1);
-  // std::cout << "Index: " << ServerStore::read_log_num()-1 << std::endl;
-  // entry_format_print(logEntry);
-
-
   return 0;
 }
 
