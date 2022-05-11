@@ -42,7 +42,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
                 value = ret_res.value;
                 return Errno::SUCCESS;
             } else if(ret_res.rc == Errno::NOT_LEADER){
-                server = ret_res.node_id;
+                server = ret_res.node_id > -1 ? ret_res.node_id : (rand() * NODE_NUM) % NODE_NUM;
                 std::cout<<"reconnect to leader "<<server<<std::endl;
             }
         } catch (TException &tx){
@@ -70,7 +70,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
 
             if(ret_res.rc == Errno::NOT_LEADER){
                 // reconnect to backup, change host
-                server = ret_res.node_id;
+                server = ret_res.node_id > -1 ? ret_res.node_id : (rand() * NODE_NUM) % NODE_NUM;
                 std::cout<<"reconnect to node "<<server<<std::endl;
             } else if(ret_res.rc== Errno::SUCCESS){
                 return ret_res.rc;
