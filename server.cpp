@@ -57,8 +57,6 @@ void blob_rpcHandler::compareBlock(const int64_t addr) {
 // TODO: seq num
 void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // not a leader
-  // TODO: what if currently there is no leader
-  // std::cout << ""
   // TODO: hangout
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
@@ -80,9 +78,6 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 
   new_request(_return, raftEntry);
   return;
-
-  // _return.rc = Errno::UNEXPECTED;
-  // return;
 }
 
 void new_request(request_ret& _return, entry e) {
@@ -92,14 +87,14 @@ void new_request(request_ret& _return, entry e) {
 
   pthread_rwlock_wrlock(&raftloglock);
   raftLog.insert(raftLog.end(), tmpLog.begin(), tmpLog.end());
-  int reqIndex = raftLog.size() - 1;
+  int reqIndex = (int) raftLog.size() - 1;
 
   nextIndex[myID] = reqIndex + 1;
   matchIndex[myID] = reqIndex;  
   pthread_rwlock_unlock(&raftloglock);
 
   std::string value;
-  while(1) {
+  while(true) {
     if(commitIndex.load() >= reqIndex) {
       if(lastApplied.load() == reqIndex - 1){
         if(e.command == 0) {
@@ -158,7 +153,7 @@ void blob_rpcHandler::write(request_ret& _return, const int64_t addr, const std:
 void appendTimeout() {
   
   std::cout << "role: " << role.load() << std::endl;
-  while(1) {
+  while(true) {
     // std::cout << "append timeouting" << std::endl;
     if(role.load() != 2) {
       break;
@@ -166,7 +161,7 @@ void appendTimeout() {
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
-      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
+//      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
       break;
     }
   }
@@ -176,8 +171,6 @@ void appendTimeout() {
 
 void toFollower(int term) {
   std:: cout << "TO FOLLOWER !!!" << std::endl;
-  // time(&last_election);
-  // std::cout << "last append: " << last_election << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
@@ -212,7 +205,7 @@ void toCandidate() {
 void leaderHeartbeat() {
   int i = 1;
 
-  while(1) {
+  while(true) {
     if(role.load() != 0) {
       break;
     }   
@@ -253,7 +246,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     std::cout << "Receive Reuqest Vote RPC" << std::endl;
     pthread_rwlock_rdlock(&raftloglock);
     int index = (int) raftLog.size() - 1;
-    int curr_last_log = -1; // todo: whether use 0 or 1
+    int curr_last_log = -1; // Note -1 is the default value for empty log in request vote
     if(index >= 0) {
         curr_last_log = raftLog[index].term;
     }
@@ -300,7 +293,7 @@ void send_vote(int ID, request_vote_reply* ret, const request_vote_args& request
   try {
 
     rpcServer[ID]->request_vote(ret[ID], requestVote);
-  }catch(apache::thrift::transport::TTransportException) {
+  }catch(apache::thrift::transport::TTransportException &e) {
     std::cout << "Node: " << ID << "is DEAD!" << std::endl;
     return;
   }
@@ -330,8 +323,8 @@ void send_request_votes() {
   
   pthread_rwlock_unlock(&raftloglock);
 
+    // request_vote_reply
   request_vote_reply ret[NODE_NUM];
-  // request_vote_reply 
 
   std::thread* requestThread = nullptr;
 
@@ -352,8 +345,7 @@ void send_request_votes() {
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
 
 
-  while(1) {
-    // std::cout << "My role: " << role.load() << std::endl;
+  while(true) {
     if(role.load() == 2) {
       std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
       return;
@@ -388,8 +380,6 @@ void send_request_votes() {
   last_election = getMillisec();
   toCandidate();
   
-  // send_request_votes();
-  
   return;
 }
 
@@ -411,7 +401,7 @@ void append_logs(const std::vector<entry>& logs, int idx){
   if(logs.empty()) {
     return;
   }
-  // not idx is the appending entries' prev log index
+  // note idx is the appending entries' prev log index
   
   // conflict 
   if ((int)raftLog.size() - 1 >= idx + 1){ // note if follower has idx size-1, ae has idx: idx + 1
@@ -454,9 +444,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
     }
 
   }
-  // if(entryNum > 0){
-  //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
-  // }
+
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       std::cout << "do ret success = 3, app term + entry: " << appendEntries.term  << " " << appendEntries.prevLogIndex << std::endl;
       ret.term = currentTerm.load();
@@ -553,7 +541,7 @@ void send_appending_requests(){
     preRet.success = -1;
     append_entries_reply ret[NODE_NUM] = {preRet, preRet, preRet};
     pthread_rwlock_rdlock(&raftloglock);
-    int lastIndex = raftLog.size() - 1;
+    int lastIndex = (int) raftLog.size() - 1;
     pthread_rwlock_unlock(&raftloglock);
 
     for (int i = 0; i < NODE_NUM; i++) {
@@ -567,9 +555,9 @@ void send_appending_requests(){
         std::cout << "i: " << i << std::endl;
         // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
-        std::cout << "append entry size " << appendEntry[i].entries.size();
-        std::cout << "lastIndex " << lastIndex << std::endl;
-        std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
+        std::cout << "append entry size: " << appendEntry[i].entries.size();
+        std::cout << "; lastIndex: " << lastIndex << std::endl;
+        std::cout << "; nextIndex[i]: " << nextIndex[i] << std::endl;
         // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
@@ -588,7 +576,7 @@ void send_appending_requests(){
 
     int ack_flag[NODE_NUM] = {0};
     ack_flag[myID] = 1;
-    while(1) {
+    while(true) {
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
@@ -626,12 +614,6 @@ void send_appending_requests(){
           // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
           std::cout << "nextIndex decrease" << std::endl;
           nextIndex[i] = nextIndex[i] - 1;
-          // std::cout << "i " << i << std::endl;
-          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
-          // ugly fix. but works
-          // if(nextIndex[i] < 0) {
-          //   nextIndex[i] = 0;
-          // }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
@@ -643,7 +625,7 @@ void send_appending_requests(){
     }
     // std::cout << "Ready to Commit!" << std::endl;
     int N = commitIndex.load();
-    while(1) {
+    while(true) {
       N++;
       if(N > lastIndex) {
         break;
@@ -666,18 +648,17 @@ void send_appending_requests(){
 }
 
 void raft_rpcHandler::ping(int other) {
-  try {
-    std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[other], raftPort[other]));
-    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-    syncInfo[other] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
-    rpcServer[other] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[other]);
-    transport->open();
-    std::cout << "ping success" << std::endl;
-  } catch (apache::thrift::transport::TTransportException) {
-    std::cout << "ping fail" << std::endl;
-  }
-  return;
+    try {
+        std::shared_ptr<TTransport> socket(new TSocket(nodeAddr[other], raftPort[other]));
+        std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+        std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+        syncInfo[other] = std::make_shared<::apache::thrift::async::TConcurrentClientSyncInfo>();
+        rpcServer[other] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[other]);
+        transport->open();
+        std::cout << "ping success" << std::endl;
+    } catch (apache::thrift::transport::TTransportException &e) {
+        std::cout << "ping fail" << std::endl;
+    }
 }
 
 void start_raft_server(int id) {
@@ -714,7 +695,7 @@ void raft_rpc_init() {
       rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
       transport->open();
       rpcServer[i]->ping(myID);
-    } catch(apache::thrift::transport::TTransportException) {
+    } catch(apache::thrift::transport::TTransportException &e) {
 
     }
   }
@@ -723,9 +704,9 @@ void raft_rpc_init() {
 
 void server_init(long init_timeout) {
 
-  pthread_rwlock_init(&rolelock, NULL);
-  pthread_rwlock_init(&raftloglock, NULL);
-  pthread_rwlock_init(&applylock, NULL);
+  pthread_rwlock_init(&rolelock, nullptr);
+  pthread_rwlock_init(&raftloglock, nullptr);
+  pthread_rwlock_init(&applylock, nullptr);
 
   // start storage
   ServerStore::init(myID);
@@ -807,7 +788,7 @@ bool  compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log
   }
 
   for(int i=0; i < (int)log1.size(); i++){
-    if(compare_one_log(log1[i], log2[i]) == false){
+    if(!compare_one_log(log1[i], log2[i])){
       return false;
     } 
   }

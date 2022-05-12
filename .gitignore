@@ -6,3 +6,4 @@ server
 .vscode/
 /Test Crash Consistency/
 .gitignore
+Test*
