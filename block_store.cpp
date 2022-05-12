@@ -12,6 +12,7 @@ using namespace apache::thrift::transport;
 // which server we are currently talking to
 
 int server;
+int flag = -1;
 std::shared_ptr<blob_rpcClient> client;
 
 void BlockStore::conn_init(const std::string& hostname, const int port) {
@@ -47,7 +48,8 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
             }
         } catch (TException &tx){
             // TODO: wait for another leader 
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            flag = server;
+            while(flag == server){server = (rand() * NODE_NUM) % NODE_NUM;}
             sleep(sleep_time);
         }
     }
@@ -79,7 +81,8 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
             // dosth
             // server = 1 - server;
             // TODO: wait for another leader
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            flag = server;
+            while(flag == server){server = (rand() * NODE_NUM) % NODE_NUM;}
             sleep(sleep_time);
         }
     }

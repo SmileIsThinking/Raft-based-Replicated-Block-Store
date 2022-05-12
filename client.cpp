@@ -134,25 +134,42 @@ int main(int argc, char** argv) {
     double accum1, accum2;
     accum1 = 0;
     accum2 = 0;
-    for(int i=0; i < 20; i++){
-        clock_gettime( CLOCK_REALTIME, &start);
-        write(0, s);
-        clock_gettime( CLOCK_REALTIME, &medium);
+    // for(int i=0; i < 20; i++){
+    //     clock_gettime( CLOCK_REALTIME, &start);
+    //     write(0, s);
+    //     clock_gettime( CLOCK_REALTIME, &medium);
         
-        read(0, read_val);
-        clock_gettime( CLOCK_REALTIME, &end);
+    //     read(0, read_val);
+    //     clock_gettime( CLOCK_REALTIME, &end);
 
-        accum1 += ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec) - 
-        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
-        accum2 += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
-        ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
+    //     accum1 += ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec) - 
+    //     ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+    //     accum2 += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+    //     ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
 
+    // }
+    clock_gettime( CLOCK_REALTIME, &start);
+    for(int i=0; i < 70; i++){
+        
+        write(0, s);
     }
-    std::cout << "read time is: " << accum1 / 100  << "ms"<<
+    for (int j=0; j < 30; j++){
+        read(0, read_val);
+    }
+        
+        
+    clock_gettime( CLOCK_REALTIME, &end);
+
+        accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+       
+
+    
+    std::cout << "total time is: " << accum1  << "ms"<<
         std::endl;
 
-    std::cout << "read time is: " << accum2 / 100  << "ms"<<
-        std::endl;
+    // std::cout << "read time is: " << accum2 /20  << "ms"<<
+    //     std::endl;
 
     
     // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
