@@ -227,8 +227,10 @@ void leaderHeartbeat() {
 void toLeader() {
   std:: cout << "TO LEADER !!!" << std::endl;
   clock_gettime( CLOCK_REALTIME, &end);
+
   double accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
         ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+  std::cout << "REAL_TIMEOUT " << REAL_TIMEOUT  << std::endl; 
   std::cout << "recovery time " << accum1  << "ms"<<
         std::endl;      
   pthread_rwlock_wrlock(&rolelock);
