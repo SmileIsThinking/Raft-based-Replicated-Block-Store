@@ -436,6 +436,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
     if(role.load() != 2) {
       std::cout << "Change to follower " << std::endl;
       toFollower(appendEntries.term);
+
       return;
     }else {
       std::cout << "I am still a follower, continue processing" << std::endl;
@@ -550,15 +551,11 @@ void send_appending_requests(){
       }
       
       if(lastIndex >= nextIndex[i]) {
-        // potential error
-        // std::cout << "stuck here" << std::endl;
         std::cout << "i: " << i << std::endl;
-        // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
         std::cout << "append entry size: " << appendEntry[i].entries.size();
         std::cout << "; lastIndex: " << lastIndex << std::endl;
         std::cout << "; nextIndex[i]: " << nextIndex[i] << std::endl;
-        // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 

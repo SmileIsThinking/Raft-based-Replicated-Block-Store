@@ -65,12 +65,13 @@ int main(int argc, char** argv) {
     std::cout << "Starting crashing the leader" << std::endl;
     sleep(10);
     // first crash
+    init_leader = 1;
     std::cout << "New leader should be elected, starting writing the new content" << std::endl;
     std::string first_crash("first crash");
     padding(first_crash, 4096);
     write(0, first_crash);
     std::cout << "Waiting for consistent state" << std::endl;
-    sleep(1);
+    sleep(5);
     read(0, read_res);
     std::cout << "Res should be first crash: " << read_res << std::endl;
     std::cout << "Recover the failed leader" << std::endl;

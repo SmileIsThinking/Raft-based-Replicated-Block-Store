@@ -29,7 +29,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
     int try_time = 0;
     std::string read_str;
     request_ret ret_res;
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : rand() % NODE_NUM;
     while(try_time < retry_time){
         try_time++;
         try{
@@ -41,7 +41,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
                 value = ret_res.value;
                 return Errno::SUCCESS;
             } else if(ret_res.rc == Errno::NOT_LEADER){
-                server = ret_res.node_id > -1 ? ret_res.node_id : (rand() * NODE_NUM) % NODE_NUM;
+                server = ret_res.node_id > -1 ? ret_res.node_id : rand() % NODE_NUM;
                 std::cout<<"reconnect to leader "<<server<<std::endl;
             }
         } catch (TException &tx){
@@ -57,24 +57,24 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
     int tries = retry_time;
     request_ret ret_res;
     // server = (rand() * NODE_NUM) % NODE_NUM;
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : rand() % NODE_NUM;;
     while(tries > 0){
         tries--;
         try{
             std::cout<<"write connect to node "<<server<<std::endl;
             conn_init(nodeAddr[server], cliPort[server]);
             client->write(ret_res, address, write);
-            std::cout<<ret_res.rc<<std::endl;;
+            std::cout<<ret_res.rc<<std::endl;
 
             if(ret_res.rc == Errno::NOT_LEADER){
                 // reconnect to backup, change host
-                server = ret_res.node_id > -1 ? ret_res.node_id : (rand() * NODE_NUM) % NODE_NUM;
+                server = ret_res.node_id > -1 ? ret_res.node_id : rand() % NODE_NUM;
                 std::cout<<"reconnect to node "<<server<<std::endl;
             } else if(ret_res.rc== Errno::SUCCESS){
                 return ret_res.rc;
             }
         } catch (TException &tx){
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            server = rand() % NODE_NUM;
             sleep(sleep_time);
         }
     }
@@ -82,7 +82,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
 }
 
 void BlockStore::compare_logs(int init_leader, int retry_time, int sleep_time){
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : rand() % NODE_NUM;
     int tries = retry_time;
     while(tries > 0){
         tries--;
@@ -92,14 +92,14 @@ void BlockStore::compare_logs(int init_leader, int retry_time, int sleep_time){
             client->compareLogs();
             return;
         } catch (TException &tx){
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            server = rand() % NODE_NUM;
             sleep(sleep_time);
         }
     }
 }
 
 void BlockStore::compare_blocks(const int64_t address, int init_leader, int retry_time, int sleep_time){
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : rand() % NODE_NUM;
     int tries = retry_time;
     while(tries > 0){
         tries--;
@@ -109,7 +109,7 @@ void BlockStore::compare_blocks(const int64_t address, int init_leader, int retr
             client->compareBlock(address);
             return;
         } catch (TException &tx){
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            server = rand() % NODE_NUM;
             sleep(sleep_time);
         }
     }

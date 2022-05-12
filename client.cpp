@@ -127,9 +127,9 @@ int main(int argc, char** argv) {
     // padding(s, 4096);
     // std::cout<<"size of the string: "<<s.size()<<std::endl;
     write(0, s);
-    // std::string read_val;
-    // read(0, read_val);
-    // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
+     std::string read_val;
+     read(0, read_val);
+     std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
     // shell();
     return 0;
 }

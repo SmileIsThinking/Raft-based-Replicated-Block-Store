@@ -108,6 +108,43 @@ struct request {
 We also create a hash map to record the largest `seqNum` for each client. If the leader receiver a request from a client with less or equal to the largest `seqNum`, it will reject the request to avoid more-than-once semantric. In some cases, leader may crash after committing the log entry but before respond ing to the client, the client will retry the command with a new leader, causing it to be executed a second time. The solution is creating another hash map to record the largest `seqNum`  that has been responsed to the client. For this part, we just finish implementation but didn't test the semantric.
 
 
+## Test
+
+### Case 1: follower crash
+#### Test1
+We manually crash a follower server after committing one writing. Perform a new writing and check if the states are up-to-date
+Later we recover the crashed follower and check if latest write has been appended to it, and states are applied on it. 
+
+### Case 2: Leader crash
+In this case, we are testing if the behavior of raft server after leader crash works as expected.
+#### Test2
+We manually crash the leader after a write operation is committed. 
+Then we crash the server and write another string, and see if the write can be committed, which means a new leader is elected
+and take the functions and states of crashed leader. 
+Then we recover the crashed server and write again. The expected result is the latest write has been applied to all servers, 
+current leader keeps leadership and all servers contain same logs containing all changes from the past.
+
+#### Test3
+Log Replication
+Only majority can commit
+
+### Case 3: Election
+Test:
+Logs:
+consistent content - random 
+one with higher term, one with lower term
+one with longer index, one with shorter index
+
+11223
+11224
+11225
+
+
+### Case 4: 
+
+
+### Case 5: delayed packets from old leaders
+
 
 ​
 
