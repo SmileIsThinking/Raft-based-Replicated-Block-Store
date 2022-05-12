@@ -185,7 +185,7 @@ void toFollower(int term) {
   ServerStore::write_state(term, vote);
   currentTerm.store(term);
   votedFor.store(vote);
-//  last_election = getMillisec();
+  last_election = getMillisec();
 
   std::thread(appendTimeout).detach();
 
@@ -263,8 +263,9 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             std::cout << "Get larger term! request_vote" << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
-            votedFor.store(requestVote.candidateId);
-            currentTerm.store(requestVote.term);
+            votedFor.store(requestVote.candidateId); // memory ops, should be fine for performance
+            //currentTerm.store(requestVote.term);
+            toFollower(requestVote.term);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
             pthread_rwlock_unlock(&raftloglock);
@@ -272,7 +273,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             ret.voteGranted = true;
             last_election = getMillisec();
             votedFor.store(requestVote.candidateId);
-            currentTerm.store(requestVote.term);
+            toFollower(requestVote.term);
             return;
         } else{
             pthread_rwlock_unlock(&raftloglock);
@@ -286,39 +287,6 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
         ret.term = currentTerm.load();
         return;
     }
-//  int vote = votedFor.load();
-//  std::cout << vote << std::endl;
-//  if(vote == -1 || vote == requestVote.candidateId) {
-//    // lastLogTerm == -1: no log
-//    std::cout << "270 voted for: " << currentTerm.load() << " " <<  requestVote.lastLogTerm << " " << raftLog.size() << " " << requestVote.lastLogIndex << std::endl;
-//
-//    /////////////////////////////////
-//    pthread_rwlock_rdlock(&raftloglock);
-//    int index = raftLog.size() - 1;
-//    if(index < 0) {
-//      requestVote.lastLogTerm = -1;
-//    }else {
-//      requestVote.lastLogTerm = raftLog[index].term;
-//    }
-//
-//    pthread_rwlock_unlock(&raftloglock);
-//    /////////////////////////////////
-//
-//    if(requestVote.lastLogTerm == -1 || requestVote.lastLogTerm > currentTerm.load()) {
-//      ret.voteGranted = true;
-//      last_election = getMillisec();
-//      votedFor.store(requestVote.candidateId);
-//      return;
-//    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
-//      ret.voteGranted = true;
-//      last_election = getMillisec();
-//      REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-//      votedFor.store(requestVote.candidateId);
-//      return;
-//    }
-//  }
-  return;    
- 
 }
 
 /*
@@ -348,8 +316,6 @@ void send_request_votes() {
   }
 
   std::cout << "Send Request Votes to others!" << std::endl;
-  // time(&last_election);
-  // requestVote init
   request_vote_args requestVote;
   requestVote.term = currentTerm.load();
   requestVote.candidateId = myID;
@@ -378,11 +344,7 @@ void send_request_votes() {
     }
     
     std::cout << "send vote request to " << i << std::endl;
-    // rpcServer[i]->request_vote(ret[i], requestVote);
-
-    // detach: variable liveness should be guaranteed!
     requestThread = new std::thread(send_vote, i, ret, requestVote);
-    // TODO: multi-thread
     requestThread->join();
   }
 
