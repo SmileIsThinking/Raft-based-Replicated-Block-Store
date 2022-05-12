@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
         ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
 
     }
-    std::cout << "read time is: " << accum1 / 100  << "ms"<<
+    std::cout << "write time is: " << accum1 / 100  << "ms"<<
         std::endl;
 
     std::cout << "read time is: " << accum2 / 100  << "ms"<<

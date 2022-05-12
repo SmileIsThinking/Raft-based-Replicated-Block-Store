@@ -166,7 +166,7 @@ void appendTimeout() {
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
-      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
+      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << " current time " << curr <<  std::endl;
       break;
     }
   }
@@ -224,7 +224,7 @@ void leaderHeartbeat() {
 }
 
 void toLeader() {
-  std:: cout << "TO LEADER !!!" << std::endl;
+  std:: cout << "TO LEADER !!!" << getMillisec() << " " << myID << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(0);
