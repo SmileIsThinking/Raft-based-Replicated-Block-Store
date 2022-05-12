@@ -109,7 +109,41 @@ We also create a hash map to record the largest `seqNum` for each client. If the
 
 
 
-​          
+## Test
+
+### Experiment Setup
+
+We run our experiment on a cluster of 4 nodes on CloudLab, three of which are run as server and another is client.  Each server has two Intel E5-2660 v3 10-core CPUs @ 2.6 GHz and ten 16 GB DDR4 2133 MHz dual rank RDIMMs. The storage device used is a 1.2 TB 10K RPM 6G SAS SFF HDD. Inter-node communication goes through Dual-port Intel X520 10Gb NIC. We measured the round trip time for a single package between any two nodes to be around 1.5 ms. We run our experiments on Ubuntu 18.04 with ext3 filesystem. Shown below are some of our initial experiment results. 
+
+### Performance test
+
+We set the election time out as 150-300 ms and appendEntries RPC interval as 50 ms.
+
+* read/write latency 
+
+We measure the read / write latency by having a single client issuing aligned and unaligned requests to the server in a synchronous manner. For each case we send the request 100 times and get the average latency over these 100 runs.  There is no much difference for read/write and aligned/unaligned. But if one server is crashed in the process, the latancy will much higher. Initially, client send a request to a random server, it's possible that the crashed one is choosed. This may happen back and forth for some times that increase the communication and output time. Our algorithm didn't handle such a problem. 
+
+<img src="/Users/yuting/Documents/course/CS739/project/proj4/Read_write latency.png" alt="Read_write latency" style="zoom:67%;" />
+
+We also run a mixed workload with read/write for 100 runs. We vary the write percentage (W) from 10% to 90% with step size 20%. The result shows that the latency increase as the write proportion increase. 
+
+<img src="/Users/yuting/Documents/course/CS739/project/proj4/Latency for different read and write.png" style="zoom:67%;" />
+
+
+
+*  Recovery time
+
+  We measure the recovery times(the time interval without leader) 5 five times. The results show that the recovery is highly related to the random election time. They are almost the same.
+
+  
+
+  <img src="/Users/yuting/Documents/course/CS739/project/proj4/Election_timeout vs. Recovery time.png" alt="Election_timeout vs. Recovery time" style="zoom: 67%;" />
+
+  
+
+### Correctness 
+
+
 
 
 
