@@ -625,9 +625,9 @@ void send_appending_requests(){
           ack_num++;
 
           std::cout << "i: " << std::endl;
-          std::cout << "nextIndex update!" << std::endl;
+          // std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
-          std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
+          // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {

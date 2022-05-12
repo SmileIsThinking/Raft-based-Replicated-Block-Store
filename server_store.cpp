@@ -105,7 +105,7 @@ int ServerStore::read(const int64_t addr, std::string& value) {
 }
 
 int ServerStore::write(const int64_t addr, const std::string& value) {
-    std::cout << "write(" << addr << ", " << value << ")" << std::endl;
+    // std::cout << "write(" << addr << ", " << value << ")" << std::endl;
     int ret = pthread_rwlock_wrlock(&rwlock);
     if (ret != 0) {
         std::cout << "LOCK ERROR!" << std::endl;
@@ -239,7 +239,7 @@ int ServerStore::read_log_num() {
     char* buf = new char[fileStat.st_size + 1];
     
     pread(log_num_fd, buf, fileStat.st_size + 1, 0); 
-    std::cout << "modified size " << fileStat.st_size << " buf " << buf << std::endl; 
+    // std::cout << "modified size " << fileStat.st_size << " buf " << buf << std::endl; 
     return (int) strtol(buf,NULL,10); //atoi(buf);
 }
 

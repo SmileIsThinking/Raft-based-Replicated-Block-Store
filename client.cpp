@@ -80,13 +80,14 @@ void shell(){
 
         // Make server calls when necessary
         try{
+            int64_t value;
+            std::istringstream iss(args);
+            iss >> value;
             if (input == "read") {
                 std::string buff;
                 int ret_code;
                 // note that if there's no numbers, the result will be 0
-                int64_t value;
-                std::istringstream iss(args);
-                iss >> value;
+                
                 ret_code = read(value, buff);
                 if (ret_code != 0){
                     std::cout << "ErrNo: " << value << std::endl;
@@ -95,7 +96,9 @@ void shell(){
                 }
                 std::cout << buff.substr(0, 10) << std::endl;
             } else if (input == "write") {
-                int resp = write(0, args);
+                std::string s;
+                stringGenerator(s, 4096);
+                int resp = write(value, s);
                 if (resp < 0){
                     std::cout << "ErrNo: " << errno << std::endl;
                     perror("write() returned ");
@@ -126,9 +129,32 @@ int main(int argc, char** argv) {
     // std::cout<<"client start" <<std::endl;
     // padding(s, 4096);
     // std::cout<<"size of the string: "<<s.size()<<std::endl;
-    write(0, s);
-    // std::string read_val;
-    // read(0, read_val);
+    struct timespec start, medium, end;
+    std::string read_val;
+    double accum1, accum2;
+    accum1 = 0;
+    accum2 = 0;
+    for(int i=0; i < 100; i++){
+        clock_gettime( CLOCK_REALTIME, &start);
+        write(0, s);
+        clock_gettime( CLOCK_REALTIME, &medium);
+        
+        read(0, read_val);
+        clock_gettime( CLOCK_REALTIME, &end);
+
+        accum1 += ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec) - 
+        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+        accum2 += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+        ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
+
+    }
+    std::cout << "read time is: " << accum1 / 100  << "ms"<<
+        std::endl;
+
+    std::cout << "read time is: " << accum2 / 100  << "ms"<<
+        std::endl;
+
+    
     // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
     // shell();
     return 0;

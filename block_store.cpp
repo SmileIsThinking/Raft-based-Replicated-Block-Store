@@ -21,7 +21,7 @@ void BlockStore::conn_init(const std::string& hostname, const int port) {
     client = std::make_shared<blob_rpcClient>(protocol);
     transport->open();
     client->ping();
-    std::cout<<"conn_init: "<<port<<std::endl;
+    // std::cout<<"conn_init: "<<port<<std::endl;
 }
 
 // note that if unexpected is returned, the client will retry until timeout
@@ -34,7 +34,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
     while(try_time < retry_time){
         try_time++;
         try{
-            std::cout<<"read connect to node "<<server<<std::endl;
+            // std::cout<<"read connect to node "<<server<<std::endl;
             conn_init(nodeAddr[server], cliPort[server]);
             client->read(ret_res, address);
 
@@ -43,7 +43,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
                 return Errno::SUCCESS;
             } else if(ret_res.rc == Errno::NOT_LEADER){
                 server = ret_res.node_id;
-                std::cout<<"reconnect to leader "<<server<<std::endl;
+                // std::cout<<"reconnect to leader "<<server<<std::endl;
             }
         } catch (TException &tx){
             // TODO: wait for another leader 
@@ -55,7 +55,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
 }
 
 Errno::type BlockStore::write(const int64_t address, std::string& write, int init_leader, int retry_time, int sleep_time) {
-    std::cout<< "start write: "<<write.substr(0, 10);
+    // std::cout<< "start write: "<<write.substr(0, 10);
     int tries = retry_time;
     request_ret ret_res;
     // server = (rand() * NODE_NUM) % NODE_NUM;
@@ -63,7 +63,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
     while(tries > 0){
         tries--;
         try{
-            std::cout<<"write connect to node "<<server<<std::endl;
+            // std::cout<<"write connect to node "<<server<<std::endl;
             conn_init(nodeAddr[server], cliPort[server]);
             client->write(ret_res, address, write);
             std::cout<<ret_res.rc<<std::endl;;
@@ -71,7 +71,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
             if(ret_res.rc == Errno::NOT_LEADER){
                 // reconnect to backup, change host
                 server = ret_res.node_id;
-                std::cout<<"reconnect to node "<<server<<std::endl;
+                // std::cout<<"reconnect to node "<<server<<std::endl;
             } else if(ret_res.rc== Errno::SUCCESS){
                 return ret_res.rc;
             }
