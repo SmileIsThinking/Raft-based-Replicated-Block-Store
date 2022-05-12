@@ -170,7 +170,7 @@ void appendTimeout() {
       break;
     }
   }
-
+  std::cout << "append timeout" << std::endl;
   toCandidate();
 }
 
@@ -184,7 +184,8 @@ void toFollower(int term) {
   int vote = -1;
   ServerStore::write_state(term, vote);
   currentTerm.store(term);
-  votedFor.store(vote); 
+  votedFor.store(vote);
+  last_election = getMillisec();
 
   std::thread(appendTimeout).detach();
 
@@ -252,7 +253,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
   std::cout << "Receive Reuqest Vote RPC" << std::endl;
 
   if(requestVote.term > currentTerm.load()) {
-    std::cout << "Get larger term!" << std::endl;
+    std::cout << "Get larger term! request_vote" << std::endl;
     toFollower(requestVote.term);
   }
 
@@ -266,15 +267,16 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
   std::cout << vote << std::endl;
   if(vote == -1 || vote == requestVote.candidateId) {
     // lastLogTerm == -1: no log
+    std::cout << "270 voted for: " << currentTerm.load() << " " <<  requestVote.lastLogTerm << " " << raftLog.size() << " " << requestVote.lastLogIndex << std::endl;
     if(requestVote.lastLogTerm == -1 || requestVote.lastLogTerm > currentTerm.load()) { 
       ret.voteGranted = true;
-      votedFor.store(requestVote.candidateId);  
+      votedFor.store(requestVote.candidateId);
       return;      
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       last_election = getMillisec();
       REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-      votedFor.store(requestVote.candidateId);   
+      votedFor.store(requestVote.candidateId);
       return;  
     } 
   }
@@ -353,9 +355,6 @@ void send_request_votes() {
 
   last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-  // std::cout << "REAL TIMEOUT: " << REAL_TIMEOUT << std::endl;
-  // random election timeout in [T, 2T] (T >> RTT)
-  // srand (time(NULL));
 
 
   while(1) {
@@ -373,7 +372,7 @@ void send_request_votes() {
       break;
     }
     for(int i = 0; i < NODE_NUM; i++) {
-      if(ret[i].voteGranted == true) {
+      if(ret[i].voteGranted) {
         count++;
       }
     }
@@ -382,9 +381,6 @@ void send_request_votes() {
       if(role.load() != 0) {
         toLeader();
       }
-  
-      // new thread???
-      // std::thread(send_appending_requests).detach();
       return;
     }
   }
@@ -394,6 +390,7 @@ void send_request_votes() {
     return;
   }
 
+  last_election = getMillisec();
   toCandidate();
   
   // send_request_votes();
@@ -450,7 +447,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
 
   // when term >= currentTerm: toFollower
   if(appendEntries.term > currentTerm.load()) {
-    std::cout << "Get larger term!" << std::endl;
+    std::cout << "Get larger term! append_entries" << std::endl;
     if(role.load() != 2) {
       std::cout << "Change to follower " << std::endl;
       toFollower(appendEntries.term);
@@ -466,7 +463,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
   // }
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
-      std::cout << "do ret success = 0" << std::endl;
+      std::cout << "do ret success = 3, app term + entry: " << appendEntries.term  << " " << appendEntries.prevLogIndex << std::endl;
       ret.term = currentTerm.load();
       ret.success = 3;
 
@@ -485,7 +482,6 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   append_logs(appendEntries.entries, appendEntries.prevLogIndex);
   if(commitIndex.load() < appendEntries.leaderCommit){
     commitIndex.store(std::min(appendEntries.leaderCommit, (int)raftLog.size()-1));
-      std::cout << "line481 commitidx load = " << commitIndex.load() << std::endl;
     applyToStateMachine();
   }
   
@@ -497,7 +493,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
 void send_appending(int ID, append_entries_reply* ret, const append_entries_args* appendEntry) {
   try {
     rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
-  }catch(apache::thrift::transport::TTransportException) {
+  }catch(apache::thrift::transport::TTransportException& e) {
     std::cout << "Node: " << ID << "is DEAD!" << std::endl;
     ret[ID].success = -2;
     return;
@@ -592,16 +588,12 @@ void send_appending_requests(){
       }
       ret[i].success = -1;
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
-      // TODO: Multi-thread
       appendThread->join();
-      // appendThread->detach();
     }
 
-      // TODO: think about it, concurrentlly add one with load/fetch_add
     int ack_flag[NODE_NUM] = {0};
     ack_flag[myID] = 1;
     while(1) {
-      // std::cout << "nextIndex[i]" << nextIndex[2] << std::endl;
       if(role.load() != 0) {
         std::cerr << "Have received AppendEntries, convert to a follower !!" << std::endl;
         return;
@@ -715,6 +707,7 @@ void start_raft_server(int id) {
 
 void raft_rpc_init() {
   for(int i = 0; i < NODE_NUM; i++) {
+    std::cout << "Try to ping node: " << i << std::endl;
     if(i == myID) {
       continue;
     }
@@ -727,7 +720,7 @@ void raft_rpc_init() {
       transport->open();
       rpcServer[i]->ping(myID);
     } catch(apache::thrift::transport::TTransportException) {
-      continue;
+
     }
   }
   return;
@@ -755,12 +748,12 @@ void server_init(long init_timeout) {
   commitIndex.store(-1);
   lastApplied.store(-1);
   leaderID.store(-1);
+  last_election = getMillisec();
   raft_rpc_init();
   for(int i = 0; i < (int)raftLog.size(); i++) {
     std::cout << "Index:  " << i << std::endl;
     entry_format_print(raftLog[i]);
   }
-
 
   REAL_TIMEOUT = init_timeout > 0 ? init_timeout : (dist(gen) + ELECTION_TIMEOUT);
   toFollower(term);

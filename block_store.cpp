@@ -29,7 +29,6 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
     int try_time = 0;
     std::string read_str;
     request_ret ret_res;
-//  server = (rand() * NODE_NUM) % NODE_NUM;
     server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
     while(try_time < retry_time){
         try_time++;
@@ -46,7 +45,6 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
                 std::cout<<"reconnect to leader "<<server<<std::endl;
             }
         } catch (TException &tx){
-            // TODO: wait for another leader 
             server = (rand() * NODE_NUM) % NODE_NUM;
             sleep(sleep_time);
         }
@@ -76,9 +74,6 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
                 return ret_res.rc;
             }
         } catch (TException &tx){
-            // dosth
-            // server = 1 - server;
-            // TODO: wait for another leader
             server = (rand() * NODE_NUM) % NODE_NUM;
             sleep(sleep_time);
         }

@@ -278,9 +278,9 @@ int ServerStore::write_state(int currentTerm, int votedFor) {
     std::cout << "Server Store write states: " << votedFor << std::endl;
     int len = (int) s.size();
 //    pwrite(state_fd, s.c_str(), len, 0);
-    std::ofstream state_file(STATE+std::to_string(curr_id),std::ofstream::trunc);
-    state_file << s;
-    state_file.close();
+    std::ofstream write_state_file(STATE+std::to_string(curr_id),std::ofstream::trunc);
+    write_state_file << s;
+    write_state_file.close();
     pthread_rwlock_unlock(&statelock);
 
     return 0;
