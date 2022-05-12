@@ -5,4 +5,3 @@ server
 .idea/
 .vscode/
 /Test Crash Consistency/
-*.xml

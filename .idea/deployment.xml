@@ -19,21 +19,21 @@
       <paths name="node0">
         <serverdata>
           <mappings>
-            <mapping deploy="/zk/Raft-based-Replicated-Block-Store" local="$PROJECT_DIR$" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
       <paths name="node1">
         <serverdata>
           <mappings>
-            <mapping deploy="/zk/Raft-based-Replicated-Block-Store" local="$PROJECT_DIR$" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
       <paths name="node2">
         <serverdata>
           <mappings>
-            <mapping deploy="/zk/Raft-based-Replicated-Block-Store" local="$PROJECT_DIR$" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
