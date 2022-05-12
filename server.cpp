@@ -44,7 +44,7 @@ void blob_rpcHandler::compareBlock(const int64_t addr) {
     if(i == myID) {
       continue;
     }
-    rpcServer[i]->blockTest(addr, value);
+    // rpcServer[i]->blockTest(addr, value);
   }
   return;
 }
@@ -422,9 +422,9 @@ void append_logs(const std::vector<entry>& logs, int idx){
 
 void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_entries_args& appendEntries) {
 
-  std::cout << "Receive Append Entries RPC" << std::endl;
+  std::cout << "Receive Append Entries RPC" << raftLog.size() << " " << commitIndex.load() << std::endl;
   if(role.load() == 0) {
-    std::cout << "I am a leader now, reject append entries" << std::endl;
+    std::cout << "I am a leader now, reject append entries" <<  std::endl;
     return;
   }
   last_election = getMillisec();
@@ -524,7 +524,7 @@ void send_appending_requests(){
         return;
     }
 
-    std::cout << "Send Appending entries to others!" << std::endl;
+    std::cout << "Send Appending entries to others! " <<  raftLog.size() << " " << commitIndex.load() << std::endl;
 
     std::thread* appendThread = nullptr;
     append_entries_args preEntry;
@@ -639,7 +639,8 @@ void send_appending_requests(){
       }
 
       if(count >= MAJORITY && raftLog[N].term == currentTerm.load()) {
-        commitIndex.store(N);
+        commitIndex = N;
+        std::cout << "commitIndex :" << commitIndex << std::endl;
       }else {
         break;
       }
