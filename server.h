@@ -34,6 +34,7 @@ using namespace ::apache::thrift::server;
 #define HB_FREQ 2000 // The frequency of sending appendEntries RPC in leader
 int64_t last_election;
 int64_t REAL_TIMEOUT;
+struct timespec start, medium, end;
 
 std::random_device rd;
 std::mt19937 gen(rd());

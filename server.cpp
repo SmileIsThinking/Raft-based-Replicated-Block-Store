@@ -166,7 +166,8 @@ void appendTimeout() {
     int64_t curr = getMillisec();
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
-      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << " current time " << curr <<  std::endl;
+      std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election  <<  std::endl;
+      clock_gettime( CLOCK_REALTIME, &start);
       break;
     }
   }
@@ -224,7 +225,12 @@ void leaderHeartbeat() {
 }
 
 void toLeader() {
-  std:: cout << "TO LEADER !!!" << getMillisec() << " " << myID << std::endl;
+  std:: cout << "TO LEADER !!!" << std::endl;
+  clock_gettime( CLOCK_REALTIME, &end);
+  double accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+  std::cout << "recovery time " << accum1  << "ms"<<
+        std::endl;      
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(0);
