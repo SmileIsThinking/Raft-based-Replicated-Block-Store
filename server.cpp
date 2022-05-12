@@ -167,7 +167,7 @@ void appendTimeout() {
     // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
       std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election  <<  std::endl;
-      clock_gettime( CLOCK_REALTIME, &start);
+      
       break;
     }
   }
@@ -279,6 +279,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       last_election = getMillisec();
+      clock_gettime( CLOCK_REALTIME, &start);
       REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
       votedFor.store(requestVote.candidateId);   
       return;  
