@@ -30,8 +30,8 @@ using namespace ::apache::thrift::server;
 
 // #define APPEND_TIMEOUT  10 
 // does not receive appendEntry in timeout and convert to candidate
-#define ELECTION_TIMEOUT  3000 // gap between different requestVote rpc
-#define HB_FREQ 2000 // The frequency of sending appendEntries RPC in leader
+#define ELECTION_TIMEOUT  150 // gap between different requestVote rpc
+#define HB_FREQ 50 // The frequency of sending appendEntries RPC in leader
 int64_t last_election;
 int64_t REAL_TIMEOUT;
 struct timespec start, medium, end;
