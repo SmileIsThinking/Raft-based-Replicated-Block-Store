@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     double accum1, accum2;
     accum1 = 0;
     accum2 = 0;
-    for(int i=0; i < 100; i++){
+    for(int i=0; i < 20; i++){
         clock_gettime( CLOCK_REALTIME, &start);
         write(0, s);
         clock_gettime( CLOCK_REALTIME, &medium);
