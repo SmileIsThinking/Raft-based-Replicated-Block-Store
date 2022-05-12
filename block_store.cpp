@@ -31,7 +31,7 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
     std::string read_str;
     request_ret ret_res;
 //  server = (rand() * NODE_NUM) % NODE_NUM;
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : (rand() ) % NODE_NUM;
     while(try_time < retry_time){
         try_time++;
         try{
@@ -48,8 +48,9 @@ Errno::type BlockStore::read(const int64_t address, std::string& value, int init
             }
         } catch (TException &tx){
             // TODO: wait for another leader 
+            std::cout << "anormal server " << server << std::endl;
             flag = server;
-            while(flag == server){server = (rand() * NODE_NUM) % NODE_NUM;}
+            while(flag == server){server = (rand() ) % NODE_NUM;}
             sleep(sleep_time);
         }
     }
@@ -61,7 +62,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
     int tries = retry_time;
     request_ret ret_res;
     // server = (rand() * NODE_NUM) % NODE_NUM;
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : (rand() ) % NODE_NUM;
     while(tries > 0){
         tries--;
         try{
@@ -81,8 +82,9 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
             // dosth
             // server = 1 - server;
             // TODO: wait for another leader
+            std::cout << "anormal server " << server << std::endl;
             flag = server;
-            while(flag == server){server = (rand() * NODE_NUM) % NODE_NUM;}
+            while(flag == server){server = (rand() ) % NODE_NUM;}
             sleep(sleep_time);
         }
     }

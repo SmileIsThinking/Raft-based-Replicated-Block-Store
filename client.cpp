@@ -28,14 +28,14 @@ int64_t str_to_int(const std::string& number){
 }
 
 int read(const int64_t address, std::string& _return){
-    std::cout<<"start to read a block" <<std::endl;
+    // std::cout<<"start to read a block" <<std::endl;
     int res = BlockStore::read(address, _return, init_leader, max_tries, sleep_time);
     return res;
 }
 
 int write(const int64_t address, std::string& write){
     Errno::type res = BlockStore::write(address, write, init_leader, max_tries, sleep_time);
-    std::cout<<"write returned" <<std::endl;
+    // std::cout<<"write returned" <<std::endl;
     return res;
 }
 
@@ -116,6 +116,73 @@ void shell(){
 //    delete afesq;
 }
 
+void test1(int addr) {
+    std::string s;
+    stringGenerator(s, 4096);
+   
+    struct timespec start, medium, end;
+    std::string read_val;
+    double accum1, accum2;
+    accum1 = 0;
+    accum2 = 0;
+    for(int i=0; i < 100; i++){
+        clock_gettime( CLOCK_REALTIME, &start);
+        write(addr, s);
+        clock_gettime( CLOCK_REALTIME, &medium);
+        
+        read(addr, read_val);
+        clock_gettime( CLOCK_REALTIME, &end);
+
+        accum1 += ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec) - 
+        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+        accum2 += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+        ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
+
+    }
+       
+    // std::cout << "total time is: " << accum1  << "ms"<<       std::endl;
+    std::cout << "write time is: " << accum1 /100 << "ms"<<       std::endl;
+
+    std::cout << "read time is: " << accum2 /100  << "ms"<< std::endl;
+
+}
+
+void test2(){
+    std::string s;
+    stringGenerator(s, 4096);
+    
+    struct timespec start, medium, end;
+    std::string read_val;
+    double accum1, accum2;
+    accum1 = 0;
+    accum2 = 0;
+    std::vector<int> a = {10, 30, 50, 70, 90};
+    clock_gettime( CLOCK_REALTIME, &start);
+    for(int k : a) {
+        for(int i=0; i < k; i++){
+        
+        write(0, s);
+        // std::cout << "writing number " << i << std::endl;
+        }
+        for (int j=0; j < (100-k); j++){
+            read(0, read_val);
+            // std::cout << "reading number " << j << std::endl;
+        }
+        
+        
+        clock_gettime( CLOCK_REALTIME, &end);
+
+            accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+            ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+        
+        
+        std::cout << "write num " << k << " total time is: " << accum1  << "ms"<<  std::endl;
+    }
+    
+    
+
+}
+
 int main(int argc, char** argv) {
     ClientState clientState;
     if (argc == 2){
@@ -124,53 +191,8 @@ int main(int argc, char** argv) {
         max_tries = std::stoi(argv[1]);
         sleep_time = std::stoi(argv[2]);
     }
-    std::string s;
-    stringGenerator(s, 4096);
-    // std::cout<<"client start" <<std::endl;
-    // padding(s, 4096);
-    // std::cout<<"size of the string: "<<s.size()<<std::endl;
-    struct timespec start, medium, end;
-    std::string read_val;
-    double accum1, accum2;
-    accum1 = 0;
-    accum2 = 0;
-    // for(int i=0; i < 20; i++){
-    //     clock_gettime( CLOCK_REALTIME, &start);
-    //     write(0, s);
-    //     clock_gettime( CLOCK_REALTIME, &medium);
-        
-    //     read(0, read_val);
-    //     clock_gettime( CLOCK_REALTIME, &end);
-
-    //     accum1 += ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec) - 
-    //     ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
-    //     accum2 += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
-    //     ((double)medium.tv_sec * 1000 + 1.0e-6*medium.tv_nsec);
-
-    // }
-    clock_gettime( CLOCK_REALTIME, &start);
-    for(int i=0; i < 70; i++){
-        
-        write(0, s);
-    }
-    for (int j=0; j < 30; j++){
-        read(0, read_val);
-    }
-        
-        
-    clock_gettime( CLOCK_REALTIME, &end);
-
-        accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
-        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
-       
-    
-    std::cout << "total time is: " << accum1  << "ms"<<       std::endl;
-
-    // std::cout << "read time is: " << accum2 /20  << "ms"<<
-    //     std::endl;
-
-    
-    // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
-    // shell();
+    // test1(0);
+    test1(5);
+    // test2();
     return 0;
 }
