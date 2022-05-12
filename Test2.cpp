@@ -60,30 +60,30 @@ int main(int argc, char** argv) {
     stringGenerator(s, 4096);
     write(0, s);
     // leader crash case: leader add entry -> sync to others with append entry -> gather result
-    std::cout << "Starting first crash" << std::endl;
+    std::cout << "Waiting for consistent state" << std::endl;
+    sleep(1);
+    std::cout << "Starting crashing the leader" << std::endl;
     sleep(10);
     // first crash
+    std::cout << "New leader should be elected, starting writing the new content" << std::endl;
     std::string first_crash("first crash");
     padding(first_crash, 4096);
     write(0, first_crash);
-    //
+    std::cout << "Waiting for consistent state" << std::endl;
     sleep(1);
     read(0, read_res);
     std::cout << "Res should be first crash: " << read_res << std::endl;
-    std::cout << "Starting second crash writ should be blocked" << std::endl;
-    sleep(5);
-    // second crash
-    std::string second_crash("second crash");
-    padding(second_crash, 4096);
-    max_tries = 1;
-    write(0, second_crash);
-    // should return nothing
-    max_tries = 6;
-    std::cout << "Starting first recovery" << std::endl;
+    std::cout << "Recover the failed leader" << std::endl;
     sleep(10);
-    // restart compare log res
-    write(0, second_crash);
     read(0, read_res);
+    std::cout << "Check if consistent after recovery, res should be \"first crash\": " << read_res << std::endl;
+    std::string recover_leader("Recover leader");
+    padding(recover_leader, 4096);
+    write(0, recover_leader);
+    // restart compare log res
+    read(0, read_res);
+    std::cout << "Check if consistent after new write, res should be \"Recover leader\": " << read_res << std::endl;
+    check_consistency(0);
     // compare logs blocks
     return 0;
 }
