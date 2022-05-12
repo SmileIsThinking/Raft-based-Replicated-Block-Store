@@ -185,7 +185,7 @@ void toFollower(int term) {
   ServerStore::write_state(term, vote);
   currentTerm.store(term);
   votedFor.store(vote);
-  last_election = getMillisec();
+//  last_election = getMillisec();
 
   std::thread(appendTimeout).detach();
 
@@ -250,40 +250,73 @@ void toLeader() {
 }
 
 void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_args& requestVote) {
-  std::cout << "Receive Reuqest Vote RPC" << std::endl;
-
-  if(requestVote.term > currentTerm.load()) {
-    std::cout << "Get larger term! request_vote" << std::endl;
-    toFollower(requestVote.term);
-  }
-
-  if(requestVote.term < currentTerm.load()) {
-    ret.voteGranted = false;
-    ret.term = currentTerm.load();
-    return;
-  }
-
-  int vote = votedFor.load();
-  std::cout << vote << std::endl;
-  if(vote == -1 || vote == requestVote.candidateId) {
-    // lastLogTerm == -1: no log
-    std::cout << "270 voted for: " << currentTerm.load() << " " <<  requestVote.lastLogTerm << " " << raftLog.size() << " " << requestVote.lastLogIndex << std::endl;
-    if(requestVote.lastLogTerm == -1 || requestVote.lastLogTerm > currentTerm.load()) { 
-      ret.voteGranted = true;
-      votedFor.store(requestVote.candidateId);
-      return;      
-    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
-      ret.voteGranted = true;
-      last_election = getMillisec();
-      REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-      votedFor.store(requestVote.candidateId);
-      return;  
-    } 
-  }
-  std::cout << "Myvote " << votedFor.load() << std::endl;
-  ret.voteGranted = false;
-  ret.term = currentTerm.load();
-  // std::cout << "Mvote " << vote << std::endl;
+    std::cout << "Receive Reuqest Vote RPC" << std::endl;
+    pthread_rwlock_rdlock(&raftloglock);
+    int index = (int) raftLog.size() - 1;
+    int curr_last_log = -1; // todo: whether use 0 or 1
+    if(index >= 0) {
+        curr_last_log = raftLog[index].term;
+    }
+    if(requestVote.lastLogTerm > curr_last_log || (requestVote.lastLogTerm == curr_last_log && requestVote.lastLogIndex >= index)){
+        if(requestVote.term > currentTerm.load()){
+            pthread_rwlock_unlock(&raftloglock);
+            std::cout << "Get larger term! request_vote" << std::endl;
+            ret.voteGranted = true;
+            last_election = getMillisec();
+            votedFor.store(requestVote.candidateId);
+            currentTerm.store(requestVote.term);
+            return;
+        }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
+            pthread_rwlock_unlock(&raftloglock);
+            std::cout << "Get same term and same/new candidate! request_vote: " << requestVote.candidateId << std::endl;
+            ret.voteGranted = true;
+            last_election = getMillisec();
+            votedFor.store(requestVote.candidateId);
+            currentTerm.store(requestVote.term);
+            return;
+        } else{
+            pthread_rwlock_unlock(&raftloglock);
+            ret.voteGranted = false;
+            ret.term = currentTerm.load();
+            return;
+        }
+    } else{
+        pthread_rwlock_unlock(&raftloglock);
+        ret.voteGranted = false;
+        ret.term = currentTerm.load();
+        return;
+    }
+//  int vote = votedFor.load();
+//  std::cout << vote << std::endl;
+//  if(vote == -1 || vote == requestVote.candidateId) {
+//    // lastLogTerm == -1: no log
+//    std::cout << "270 voted for: " << currentTerm.load() << " " <<  requestVote.lastLogTerm << " " << raftLog.size() << " " << requestVote.lastLogIndex << std::endl;
+//
+//    /////////////////////////////////
+//    pthread_rwlock_rdlock(&raftloglock);
+//    int index = raftLog.size() - 1;
+//    if(index < 0) {
+//      requestVote.lastLogTerm = -1;
+//    }else {
+//      requestVote.lastLogTerm = raftLog[index].term;
+//    }
+//
+//    pthread_rwlock_unlock(&raftloglock);
+//    /////////////////////////////////
+//
+//    if(requestVote.lastLogTerm == -1 || requestVote.lastLogTerm > currentTerm.load()) {
+//      ret.voteGranted = true;
+//      last_election = getMillisec();
+//      votedFor.store(requestVote.candidateId);
+//      return;
+//    }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
+//      ret.voteGranted = true;
+//      last_election = getMillisec();
+//      REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
+//      votedFor.store(requestVote.candidateId);
+//      return;
+//    }
+//  }
   return;    
  
 }
