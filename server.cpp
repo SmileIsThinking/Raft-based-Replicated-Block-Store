@@ -296,7 +296,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     std::cout << "Receive Reuqest Vote RPC" << std::endl;
     pthread_rwlock_rdlock(&raftloglock);
     int index = (int) raftLog.size() - 1;
-    int curr_last_log = -1; // todo: whether use 0 or 1
+    int curr_last_log = -1; // Note -1 is the default value for empty log in request vote
     if(index >= 0) {
         curr_last_log = raftLog[index].term;
     }
@@ -318,18 +318,11 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             votedFor.store(requestVote.candidateId);
             toFollower(requestVote.term);
             return;
-        } else{
-            pthread_rwlock_unlock(&raftloglock);
-            ret.voteGranted = false;
-            ret.term = currentTerm.load();
-            return;
         }
-    } else{
-        pthread_rwlock_unlock(&raftloglock);
-        ret.voteGranted = false;
-        ret.term = currentTerm.load();
-        return;
     }
+    pthread_rwlock_unlock(&raftloglock);
+    ret.voteGranted = false;
+    ret.term = currentTerm.load();
 }
 
 /*
