@@ -163,10 +163,8 @@ int main(int argc, char** argv) {
         accum1 = ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
         ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
        
-
     
-    std::cout << "total time is: " << accum1  << "ms"<<
-        std::endl;
+    std::cout << "total time is: " << accum1  << "ms"<<       std::endl;
 
     // std::cout << "read time is: " << accum2 /20  << "ms"<<
     //     std::endl;
