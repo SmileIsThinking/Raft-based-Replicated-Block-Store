@@ -279,7 +279,6 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
     }else if(requestVote.lastLogTerm == currentTerm.load() && requestVote.lastLogIndex >= (int)raftLog.size()) {
       ret.voteGranted = true;
       last_election = getMillisec();
-      clock_gettime( CLOCK_REALTIME, &start);
       REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
       votedFor.store(requestVote.candidateId);   
       return;  
@@ -454,7 +453,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
   }
   last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-
+  clock_gettime(CLOCK_REALTIME, &start);
   // when term >= currentTerm: toFollower
   if(appendEntries.term > currentTerm.load()) {
     std::cout << "Get larger term!" << std::endl;
