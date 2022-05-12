@@ -4,7 +4,7 @@ LIB := -lthrift -pthread
 
 DEP := gen-cpp/blob_rpc.cpp gen-cpp/raft_rpc.cpp gen-cpp/rpc_types.cpp
 
-all: server client
+all: server client gen
 
 server: thrift server.cpp server.h server_store.cpp server_store.h 
 	${CC} ${CFLAGS} -o server server.cpp server_store.cpp util.cpp ${DEP} ${LIB}
