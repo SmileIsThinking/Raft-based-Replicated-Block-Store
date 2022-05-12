@@ -18,5 +18,8 @@ thrift: rpc.thrift
 test1: thrift Test1.cpp block_store.cpp block_store.h
 	${CC} ${CFLAGS} -o test1 Test1.cpp block_store.cpp util.cpp ${DEP} ${LIB}
 
+gen: thrift gen.cpp server_store.cpp server_store.h
+	${CC} ${CFLAGS} -o gen gen.cpp server_store.cpp util.cpp ${DEP} ${LIB}
+
 clean:
 	rm -rf gen-cpp/ server client
