@@ -150,7 +150,9 @@ Created log 2: \
 node 0: 1111 \
 node 1: 111 \
 node 2: 11111 \
-node 2 becomes the leader
+node 0 or 2 becomes the leader
+
+https://drive.google.com/file/d/1soTstrRC60g0y9l-dnqNzbnYCKcTt9SQ/view?usp=sharing
 
 ### Case 4: delayed appending packets from old leaders
 In our implementation, when an appending packet
