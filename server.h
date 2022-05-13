@@ -20,6 +20,7 @@
 #include "server_store.h"
 #include <vector>
 #include "util.h"
+#include <set>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -39,7 +40,7 @@ std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 
-
+std::set<int> appliedIndex;
 pthread_rwlock_t applylock;
 std::string my_addr;
 
@@ -139,6 +140,7 @@ void entry_format_print(entry logEntry);
 void applyToStateMachine();
 
 void new_request(request_ret& _return, entry e);
+bool ifOverlap(int64_t addr1, int64_t addr2);
 
 bool compare_one_log(const entry& e1, entry& e2);
 bool compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log2);
