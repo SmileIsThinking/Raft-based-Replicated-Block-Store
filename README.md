@@ -33,7 +33,7 @@ For the leader election, we design a function ```send_request_votes()``` for can
 Once a leader is elected, it appends the command to its log as a new entry, then started to send AppendEntries RPCs(implemented by function ```send_appending_requests()```) in parallel to each of the other servers to replicate the entry. The RPC handler is implemented in ```append_entries``.
 
 ## Testing & Measurement
-
+Note we have two versions of code, one of which contains concurrent optimization for sending requests but not fully tested for concurrency. (So far we have not met inconsistency due to this optimization but not confirmed for correctness)
 ### Correstness
 We write all test cases in `client.cpp`.
 - test1: test availability by crashing one node and checking users can still read written data.
