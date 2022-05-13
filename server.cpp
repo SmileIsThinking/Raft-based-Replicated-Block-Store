@@ -603,7 +603,7 @@ void send_appending_requests(){
 //            appendThread->join();
 //            continue;
 //        }
-//      appendThread = new std::thread(send_appending, i, ret, appendEntry);
+      appendThread = new std::thread(send_appending, i, ret, appendEntry);
       appendThread->join();
     }
 
@@ -617,8 +617,6 @@ void send_appending_requests(){
       int ack_num = 0;
 
       for(int i = 0; i < NODE_NUM; i++) {
-        // std::cout << "nextIndex[1]" << nextIndex[1] << std::endl;
-        // std::cout << "nextIndex[2]" << nextIndex[2] << std::endl;
         if(ack_flag[i] == 1) {
           ack_num++;
           continue;
@@ -632,7 +630,6 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
 
-          std::cout << "i: " << std::endl;
           std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
           std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
@@ -645,7 +642,6 @@ void send_appending_requests(){
           }
           ack_flag[i] = 1;
           ack_num++;
-          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
           std::cout << "nextIndex decrease" << std::endl;
           nextIndex[i] = nextIndex[i] - 1;
         }else if(ret[i].success == -2) {

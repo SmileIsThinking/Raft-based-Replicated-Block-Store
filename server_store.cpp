@@ -72,7 +72,6 @@ int ServerStore::init(int node_id) {
     if(fileStat.st_size == 0) {
         std::string s = std::to_string(0);
         int len = (int) s.size();
-        std::cout << "line 75: " << len << std::endl;
         pwrite(log_num_fd, s.c_str(), len, 0);
     }
     pthread_rwlock_unlock(&loglock);
