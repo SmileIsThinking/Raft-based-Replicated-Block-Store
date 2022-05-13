@@ -147,29 +147,6 @@ void test1(int addr) {
 
 }
 
-void test3(){
-    std::string s;
-    stringGenerator(s, 4096);
-    
-    struct timespec start, end;
-    std::string read_val;
-    double accum;
-    accum = 0;
-    write(0, s);
-    for(int i=0; i < 1000; i++){
-        
-        clock_gettime( CLOCK_REALTIME, &start);
-        read(0, read_val);
-        clock_gettime( CLOCK_REALTIME, &end);
-
-        accum += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
-        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
-
-    }
-    std::cout << " avg time is: " << accum/1000  << "ms"<<  std::endl;
-    
-}
-
 void test2(){
     std::string s;
     stringGenerator(s, 4096);
@@ -206,6 +183,30 @@ void test2(){
 
 }
 
+
+void test3(){
+    std::string s;
+    stringGenerator(s, 4096);
+    
+    struct timespec start, end;
+    std::string read_val;
+    double accum;
+    accum = 0;
+    write(0, s);
+    for(int i=0; i < 100; i++){
+        
+        clock_gettime( CLOCK_REALTIME, &start);
+        read(0, read_val);
+        clock_gettime( CLOCK_REALTIME, &end);
+
+        accum += ((double)end.tv_sec * 1000 + 1.0e-6*end.tv_nsec) - 
+        ((double)start.tv_sec * 1000 + 1.0e-6*start.tv_nsec);
+
+    }
+    std::cout << " avg time is: " << accum/1000  << "ms"<<  std::endl;
+    
+}
+
 int main(int argc, char** argv) {
     ClientState clientState;
     if (argc == 2){
@@ -214,7 +215,7 @@ int main(int argc, char** argv) {
         max_tries = std::stoi(argv[1]);
         sleep_time = std::stoi(argv[2]);
     }
-    // test1(0);
+    // test1(0);make
     test3();
     // test2();
     return 0;

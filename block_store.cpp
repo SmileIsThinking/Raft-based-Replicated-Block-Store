@@ -92,7 +92,7 @@ Errno::type BlockStore::write(const int64_t address, std::string& write, int ini
 }
 
 void BlockStore::compare_logs(int init_leader, int retry_time, int sleep_time){
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : (rand() ) % NODE_NUM;
     int tries = retry_time;
     while(tries > 0){
         tries--;
@@ -102,14 +102,14 @@ void BlockStore::compare_logs(int init_leader, int retry_time, int sleep_time){
             client->compareLogs();
             return;
         } catch (TException &tx){
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            server = (rand() ) % NODE_NUM;
             sleep(sleep_time);
         }
     }
 }
 
 void BlockStore::compare_blocks(const int64_t address, int init_leader, int retry_time, int sleep_time){
-    server = init_leader > -1 ? init_leader : (rand() * NODE_NUM) % NODE_NUM;
+    server = init_leader > -1 ? init_leader : (rand() ) % NODE_NUM;
     int tries = retry_time;
     while(tries > 0){
         tries--;
@@ -119,7 +119,7 @@ void BlockStore::compare_blocks(const int64_t address, int init_leader, int retr
             client->compareBlock(address);
             return;
         } catch (TException &tx){
-            server = (rand() * NODE_NUM) % NODE_NUM;
+            server = (rand() ) % NODE_NUM;
             sleep(sleep_time);
         }
     }
