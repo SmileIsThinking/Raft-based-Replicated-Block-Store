@@ -109,7 +109,7 @@ We also create a hash map to record the largest `seqNum` for each client. If the
 
 
 ## Test
-
+Note we have a function call to compare the log contents showing in terminals
 ### Case 1: follower crash
 #### Test1
 We manually crash a follower server after committing one writing. Perform a new writing and check if the states are up-to-date
@@ -135,9 +135,11 @@ Logs:
 one with higher term, one with lower term
 one with longer index, one with shorter index
 
-11223
-11224
-11225
+222222
+222222
+2222
+
+22
 
 Leader send AE, a candidate send 
 
@@ -145,6 +147,9 @@ Leader send AE, a candidate send
 In our implementation, when an appending packet
 when all have log term x and index 2
 a delayed packet is sent to first node replicate to
+The result shows the delayed packet will not influence the client operation 
+and replication of nodes without such packet.
+The latter writes have been applied to the nodes and the log content are consistent
 
 
 ​
