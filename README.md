@@ -136,22 +136,21 @@ The expected result is leader becomes the follower with consistent log.
 
 https://drive.google.com/file/d/1Zt9oHVV8RXo8_n3iyGmPs7Qxj7ooGYDh/view?usp=sharing
 
-Logs:
+Test3-1: \
 Created log 1: \
 node 0: 1124 \
 node 1: 112 \
 node 2: 11333 \
+node 0 becomes the leader
 
-one with higher term, one with lower term
-one with longer index, one with shorter index
+https://drive.google.com/file/d/1VvpLTIezIThuGL4Ow0CS_uJhJnf2c9gD/view?usp=sharing
 
-222222
-222222
-2222
-
-22
-
-Leader send AE, a candidate send 
+Test3-2: \
+Created log 2: \
+node 0: 1111 \
+node 1: 111 \
+node 2: 11111 \
+node 2 becomes the leader
 
 ### Case 4: delayed appending packets from old leaders
 In our implementation, when an appending packet

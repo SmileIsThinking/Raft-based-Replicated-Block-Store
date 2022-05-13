@@ -185,7 +185,7 @@ void toFollower(int term) {
   pthread_rwlock_unlock(&rolelock);
 }
 
-void toFollower(int term, int vote_for) {
+void toFollower2(int term, int vote_for) {
     std:: cout << "TO FOLLOWER WITH VOTE!!!" << std::endl;
     pthread_rwlock_wrlock(&rolelock);
     role.store(2);
@@ -263,6 +263,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
         curr_last_log = raftLog[index].term;
     }
     if(requestVote.lastLogTerm > curr_last_log || (requestVote.lastLogTerm == curr_last_log && requestVote.lastLogIndex >= index)){
+        std::cout << requestVote.lastLogTerm << " " << curr_last_log << " "  << requestVote.lastLogIndex << " " << index << std::endl;
         if(requestVote.term > currentTerm.load()){
             pthread_rwlock_unlock(&raftloglock);
             std::cout << "Get larger term! request_vote" << std::endl;
@@ -270,7 +271,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             last_election = getMillisec();
             votedFor.store(requestVote.candidateId);
             currentTerm.store(requestVote.term);
-            toFollower(requestVote.term, requestVote.candidateId);
+            toFollower2(requestVote.term, requestVote.candidateId);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
             pthread_rwlock_unlock(&raftloglock);
@@ -278,7 +279,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             ret.voteGranted = true;
             last_election = getMillisec();
             votedFor.store(requestVote.candidateId);
-            toFollower(requestVote.term, requestVote.candidateId);
+            toFollower2(requestVote.term, requestVote.candidateId);
             return;
         } else{
             pthread_rwlock_unlock(&raftloglock);
