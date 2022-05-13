@@ -268,7 +268,8 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             std::cout << "Get larger term! request_vote" << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
-            //currentTerm.store(requestVote.term);
+            votedFor.store(requestVote.candidateId);
+            currentTerm.store(requestVote.term);
             toFollower(requestVote.term, requestVote.candidateId);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
@@ -276,6 +277,7 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             std::cout << "Get same term and same/new candidate! request_vote: " << requestVote.candidateId << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
+            votedFor.store(requestVote.candidateId);
             toFollower(requestVote.term, requestVote.candidateId);
             return;
         } else{

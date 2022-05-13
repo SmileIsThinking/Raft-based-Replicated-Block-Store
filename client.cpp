@@ -131,5 +131,6 @@ int main(int argc, char** argv) {
      read(0, read_val);
      std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
     // shell();
+    check_consistency(0);
     return 0;
 }

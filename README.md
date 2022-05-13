@@ -127,9 +127,11 @@ Then we recover the crashed server and write again. The expected result is the l
 current leader keeps leadership and all servers contain same logs containing all changes from the past.
 
 ### Case 3: Election
-Test:
+Test3:
+When a crashed leader recovers, it contains the old term.
+The expected result is leader becomes the follower with consistent log.
+
 Logs:
-consistent content - random 
 one with higher term, one with lower term
 one with longer index, one with shorter index
 
@@ -142,7 +144,8 @@ Leader send AE, a candidate send
 ### Case 4: delayed appending packets from old leaders
 In our implementation, when an appending packet
 when all have log term x and index 2
-send a packet from leader to follower with term x-1
+a delayed packet is sent to first node replicate to
+
 
 ​
 
