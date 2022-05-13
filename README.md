@@ -38,6 +38,7 @@ We write all test cases in `client.cpp`.
 - test1: test availability by crashing one node and checking users can still read written data.
 - test2: test strong consistency by crashing one node and overwriting the block.
 - test3: test concurrency with multiple clients by crashing or not crashing server.
+
 More tests are described in our report with test cases and below is the link to the demo video: 
 - https://drive.google.com/drive/folders/11E-LPlVXfZXQGxDksXzikIm2axdYN8At?usp=sharing
 - The above duplicate/delayed append entry packets and check data consistency after receiving these packets (Test4)
