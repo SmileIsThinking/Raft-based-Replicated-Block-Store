@@ -116,6 +116,7 @@ We manually crash a follower server after committing one writing. Perform a new 
 Later we recover the crashed follower and check if latest write has been appended to it, and states are applied on it. 
 Another key point is that the server will not return any result until 2 servers are present and sync their logs
 (Leader Completeness)
+https://drive.google.com/file/d/12Vgw-9psT6-yqLlIpZGd7ksz3L8s0ioC/view?usp=sharing
 
 ### Case 2: Leader crash
 In this case, we are testing if the behavior of raft server after leader crash works as expected.
@@ -126,12 +127,21 @@ and take the functions and states of crashed leader.
 Then we recover the crashed server and write again. The expected result is the latest write has been applied to all servers, 
 current leader keeps leadership and all servers contain same logs containing all changes from the past.
 
+https://drive.google.com/file/d/1ML2eBNuN-YR-LqaW4SarrI-UY5spd3M-/view?usp=sharing
+
 ### Case 3: Election
 Test3:
 When a crashed leader recovers, it contains the old term.
 The expected result is leader becomes the follower with consistent log.
 
+https://drive.google.com/file/d/1Zt9oHVV8RXo8_n3iyGmPs7Qxj7ooGYDh/view?usp=sharing
+
 Logs:
+Created log 1: \
+node 0: 1124 \
+node 1: 112 \
+node 2: 11333 \
+
 one with higher term, one with lower term
 one with longer index, one with shorter index
 
@@ -151,6 +161,7 @@ The result shows the delayed packet will not influence the client operation
 and replication of nodes without such packet.
 The latter writes have been applied to the nodes and the log content are consistent
 
+https://drive.google.com/file/d/1pKsF_4ES8u5UOBeDe0e6gmpFQYzJ3F_X/view?usp=sharing
 
 ​
 

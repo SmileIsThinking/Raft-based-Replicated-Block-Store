@@ -595,15 +595,15 @@ void send_appending_requests(){
         appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
       }
       ret[i].success = -1;
-        if (lastIndex == 2 && !sent_delayed_packet.load()){
-            // send duplicate packet
-            sent_delayed_packet.store(true);
-            std::cout << "Send one duplicate: " << nextIndex[i] << std::endl;
-            appendThread = new std::thread(send_appending_delayed, i, ret, appendEntry);
-            appendThread->join();
-            continue;
-        }
-      appendThread = new std::thread(send_appending, i, ret, appendEntry);
+//        if (lastIndex == 2 && !sent_delayed_packet.load()){
+//            // send duplicate packet
+//            sent_delayed_packet.store(true);
+//            std::cout << "Send one duplicate: " << nextIndex[i] << std::endl;
+//            appendThread = new std::thread(send_appending_delayed, i, ret, appendEntry);
+//            appendThread->join();
+//            continue;
+//        }
+//      appendThread = new std::thread(send_appending, i, ret, appendEntry);
       appendThread->join();
     }
 
