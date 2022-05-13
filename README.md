@@ -114,6 +114,8 @@ We also create a hash map to record the largest `seqNum` for each client. If the
 #### Test1
 We manually crash a follower server after committing one writing. Perform a new writing and check if the states are up-to-date
 Later we recover the crashed follower and check if latest write has been appended to it, and states are applied on it. 
+Another key point is that the server will not return any result until 2 servers are present and sync their logs
+(Leader Completeness)
 
 ### Case 2: Leader crash
 In this case, we are testing if the behavior of raft server after leader crash works as expected.
@@ -123,10 +125,6 @@ Then we crash the server and write another string, and see if the write can be c
 and take the functions and states of crashed leader. 
 Then we recover the crashed server and write again. The expected result is the latest write has been applied to all servers, 
 current leader keeps leadership and all servers contain same logs containing all changes from the past.
-
-#### Test3
-Log Replication
-Only majority can commit
 
 ### Case 3: Election
 Test:
@@ -139,12 +137,12 @@ one with longer index, one with shorter index
 11224
 11225
 
+Leader send AE, a candidate send 
 
-### Case 4: 
-
-
-### Case 5: delayed packets from old leaders
-
+### Case 4: delayed appending packets from old leaders
+In our implementation, when an appending packet
+when all have log term x and index 2
+send a packet from leader to follower with term x-1
 
 ​
 

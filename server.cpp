@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string>
 #include <random>
-
+std::atomic_bool sent_delayed_packet;
 
 
 void start_blob_server(int id) {
@@ -185,6 +185,18 @@ void toFollower(int term) {
   pthread_rwlock_unlock(&rolelock);
 }
 
+void toFollower(int term, int vote_for) {
+    std:: cout << "TO FOLLOWER WITH VOTE!!!" << std::endl;
+    pthread_rwlock_wrlock(&rolelock);
+    role.store(2);
+    ServerStore::write_state(term, vote_for);
+    currentTerm.store(term);
+    votedFor.store(vote_for);
+    last_election = getMillisec();
+    std::thread(appendTimeout).detach();
+    pthread_rwlock_unlock(&rolelock);
+}
+
 void toCandidate() {
   std:: cout << "TO CANDIDATE !!!" << std::endl;
   pthread_rwlock_wrlock(&rolelock);
@@ -256,17 +268,15 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             std::cout << "Get larger term! request_vote" << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
-            votedFor.store(requestVote.candidateId); // memory ops, should be fine for performance
             //currentTerm.store(requestVote.term);
-            toFollower(requestVote.term);
+            toFollower(requestVote.term, requestVote.candidateId);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
             pthread_rwlock_unlock(&raftloglock);
             std::cout << "Get same term and same/new candidate! request_vote: " << requestVote.candidateId << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
-            votedFor.store(requestVote.candidateId);
-            toFollower(requestVote.term);
+            toFollower(requestVote.term, requestVote.candidateId);
             return;
         } else{
             pthread_rwlock_unlock(&raftloglock);
@@ -343,6 +353,10 @@ void send_request_votes() {
 
   last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
+  if(false){
+      requestVote.term--;
+      requestThread = new std::thread(send_vote, 2, ret, requestVote);
+  }
 
 
   while(true) {
@@ -352,9 +366,6 @@ void send_request_votes() {
     }
     int count = 0;
     int64_t curr = getMillisec();
-    // std::cout << "Right now the time: " << curr << std::endl;
-    // std::cout << "Last election: " << last_election << std::endl;
-    // std::cout << "TIMEOUT: " << REAL_TIMEOUT << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
       break;
     }
@@ -436,7 +447,6 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
     if(role.load() != 2) {
       std::cout << "Change to follower " << std::endl;
       toFollower(appendEntries.term);
-
       return;
     }else {
       std::cout << "I am still a follower, continue processing" << std::endl;
@@ -457,6 +467,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
 
   // not a leader and not a follower
   if(role.load() == 1) {
+    std::cout << "Change to follower 463 " << std::endl;
     toFollower(appendEntries.term);
     return;
   }
@@ -485,6 +496,21 @@ void send_appending(int ID, append_entries_reply* ret, const append_entries_args
   
   return;
 }
+
+
+void send_appending_delayed(int ID, append_entries_reply* ret, const append_entries_args* appendEntry) {
+    try {
+        std::cout << "Send Delayed entries to others!" << std::endl;
+        sleep(10);
+        rpcServer[ID]->append_entries(ret[ID], appendEntry[ID]);
+        std::cout << "Sent Delayed entries to others!" << std::endl;
+    }catch(apache::thrift::transport::TTransportException& e) {
+        std::cout << "Node: " << ID << "is DEAD!" << std::endl;
+        ret[ID].success = -2;
+        return;
+    }
+}
+
 
 void raft_rpcHandler::compareTest(const std::vector<entry> & leaderLog, \
                                 const int32_t leaderTerm, const int32_t leaderVote) {
@@ -567,6 +593,14 @@ void send_appending_requests(){
         appendEntry[i].prevLogTerm = raftLog[appendEntry[i].prevLogIndex].term;
       }
       ret[i].success = -1;
+        if (lastIndex == 2 && !sent_delayed_packet.load()){
+            // send duplicate packet
+            sent_delayed_packet.store(true);
+            std::cout << "Send one duplicate: " << nextIndex[i] << std::endl;
+            appendThread = new std::thread(send_appending_delayed, i, ret, appendEntry);
+            appendThread->join();
+            continue;
+        }
       appendThread = new std::thread(send_appending, i, ret, appendEntry);
       appendThread->join();
     }
@@ -603,6 +637,7 @@ void send_appending_requests(){
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
+              std::cout << "Becomes follower with larger term returned" << std::endl;
             toFollower(ret[i].term);
             return;
           }
@@ -749,7 +784,7 @@ int main(int argc, char** argv) {
   if(argc > 2){
       init_time_out = atol(argv[2]);
   }
-
+    sent_delayed_packet.store(false);
 
   std::thread blob(start_blob_server, myID);
   std::thread raft(start_raft_server, myID);
