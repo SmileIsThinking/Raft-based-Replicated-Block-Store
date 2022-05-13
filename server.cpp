@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string>
 #include <random>
+#include <set>
 std::atomic_bool sent_delayed_packet;
 
 
@@ -80,6 +81,17 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   return;
 }
 
+bool ifOverlap(int64_t addr1, int64_t addr2) {
+  int64_t diff = addr1 - addr2;
+  if(diff < BLOCK_SIZE && diff > -1 * BLOCK_SIZE) {
+    // is overlap
+    return true;
+  }else {
+    // non-overlap
+    return false;
+  }
+}
+
 void new_request(request_ret& _return, entry e) {
   std::vector<entry> tmpLog;
   tmpLog.emplace_back(e);
@@ -96,22 +108,56 @@ void new_request(request_ret& _return, entry e) {
   std::string value;
   while(true) {
     if(commitIndex.load() >= reqIndex) {
-      if(lastApplied.load() == reqIndex - 1){
+      // check overlap
+      bool overlap = false;
+      int64_t thisAddr = e.address;
+      for(int i = lastApplied.load() + 1; i < reqIndex; i++) {
+        if(raftLog[i].command == 0) {
+          overlap = false;
+        }else {
+          overlap = ifOverlap(thisAddr, raftLog[i].address);
+          if(overlap == true){
+            break;
+          }
+        }
+      }
+      if(overlap == false) {
         if(e.command == 0) {
           ServerStore::read(e.address, _return.value);
         }else if(e.command == 1) {
           ServerStore::write(e.address, e.content);
         }
         _return.rc = Errno::SUCCESS;
-        lastApplied.fetch_add(1);
-        return;        
+        appliedIndex.insert(reqIndex);
+        return;
+
+      }else{
+        if(lastApplied.load() == reqIndex - 1){
+          if(e.command == 0) {
+            ServerStore::read(e.address, _return.value);
+          }else if(e.command == 1) {
+            ServerStore::write(e.address, e.content);
+          }
+          _return.rc = Errno::SUCCESS;
+          appliedIndex.insert(reqIndex);
+          pthread_rwlock_wrlock(&applylock);
+          while(1) {
+            if(appliedIndex.count(lastApplied.load() + 1) > 0) {
+              lastApplied.fetch_add(1);
+            }else {
+              break;
+            }
+          }
+          pthread_rwlock_unlock(&applylock);
+          return;
+        }
       }
+
     }
   }
 }
 
 void applyToStateMachine() {
-  pthread_rwlock_wrlock(&applylock);
   int apply = lastApplied.load();
   while (commitIndex.load() > apply){
     int newApplied = apply + 1;
@@ -121,7 +167,6 @@ void applyToStateMachine() {
     apply = newApplied;
   }
   lastApplied.store(commitIndex.load());
-  pthread_rwlock_unlock(&applylock);
   return;
 }
 
@@ -165,13 +210,13 @@ void appendTimeout() {
       break;
     }
   }
-  std::cout << "append timeout" << std::endl;
+
   toCandidate();
 }
 
 void toFollower(int term) {
   std:: cout << "TO FOLLOWER !!!" << std::endl;
-  pthread_rwlock_wrlock(&rolelock);
+ pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
   int vote = -1;
@@ -263,14 +308,13 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
         curr_last_log = raftLog[index].term;
     }
     if(requestVote.lastLogTerm > curr_last_log || (requestVote.lastLogTerm == curr_last_log && requestVote.lastLogIndex >= index)){
-        std::cout << requestVote.lastLogTerm << " " << curr_last_log << " "  << requestVote.lastLogIndex << " " << index << std::endl;
         if(requestVote.term > currentTerm.load()){
             pthread_rwlock_unlock(&raftloglock);
             std::cout << "Get larger term! request_vote" << std::endl;
             ret.voteGranted = true;
             last_election = getMillisec();
-            votedFor.store(requestVote.candidateId);
-            currentTerm.store(requestVote.term);
+            votedFor.store(requestVote.candidateId); // memory ops, should be fine for performance
+            //currentTerm.store(requestVote.term);
             toFollower2(requestVote.term, requestVote.candidateId);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
@@ -281,18 +325,11 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             votedFor.store(requestVote.candidateId);
             toFollower2(requestVote.term, requestVote.candidateId);
             return;
-        } else{
-            pthread_rwlock_unlock(&raftloglock);
-            ret.voteGranted = false;
-            ret.term = currentTerm.load();
-            return;
         }
-    } else{
-        pthread_rwlock_unlock(&raftloglock);
-        ret.voteGranted = false;
-        ret.term = currentTerm.load();
-        return;
     }
+    pthread_rwlock_unlock(&raftloglock);
+    ret.voteGranted = false;
+    ret.term = currentTerm.load();
 }
 
 /*
@@ -356,10 +393,9 @@ void send_request_votes() {
 
   last_election = getMillisec();
   REAL_TIMEOUT = dist(gen) + ELECTION_TIMEOUT;
-  if(false){
-      requestVote.term--;
-      requestThread = new std::thread(send_vote, 2, ret, requestVote);
-  }
+  // std::cout << "REAL TIMEOUT: " << REAL_TIMEOUT << std::endl;
+  // random election timeout in [T, 2T] (T >> RTT)
+  // srand (time(NULL));
 
 
   while(true) {
@@ -382,7 +418,7 @@ void send_request_votes() {
       if(role.load() != 0) {
         toLeader();
       }
-      return;
+        return;
     }
   }
 
@@ -391,9 +427,8 @@ void send_request_votes() {
     return;
   }
 
-  last_election = getMillisec();
   toCandidate();
-  
+
   return;
 }
 
@@ -423,8 +458,6 @@ void append_logs(const std::vector<entry>& logs, int idx){
       raftLog.erase(raftLog.begin() + idx + 1, raftLog.end());
   }
 
-  std::cout << "Append log!!" << std::endl;
-  std::cout << "size " << logs.size() << std::endl;
   ServerStore::append_log(logs);
 
   pthread_rwlock_wrlock(&raftloglock);
@@ -470,9 +503,8 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
 
   // not a leader and not a follower
   if(role.load() == 1) {
-    std::cout << "Change to follower 463 " << std::endl;
     toFollower(appendEntries.term);
-    return;
+    //todo: return； ？？？
   }
  
   leaderID.store(appendEntries.leaderId);
@@ -608,6 +640,7 @@ void send_appending_requests(){
       appendThread->join();
     }
 
+      // TODO: think about it, concurrentlly add one with load/fetch_add
     int ack_flag[NODE_NUM] = {0};
     ack_flag[myID] = 1;
     while(true) {
@@ -618,6 +651,8 @@ void send_appending_requests(){
       int ack_num = 0;
 
       for(int i = 0; i < NODE_NUM; i++) {
+        // std::cout << "nextIndex[1]" << nextIndex[1] << std::endl;
+        // std::cout << "nextIndex[2]" << nextIndex[2] << std::endl;
         if(ack_flag[i] == 1) {
           ack_num++;
           continue;
@@ -631,20 +666,23 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
 
-          std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
-          std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
-              std::cout << "Becomes follower with larger term returned" << std::endl;
             toFollower(ret[i].term);
             return;
           }
           ack_flag[i] = 1;
           ack_num++;
-          std::cout << "nextIndex decrease" << std::endl;
-          nextIndex[i] = nextIndex[i] - 1;
+          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
+          // nextIndex[i] = nextIndex[i] - 1;
+          // std::cout << "i " << i << std::endl;
+          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
+          // ugly fix. but works
+          if(nextIndex[i] < 0) {
+            nextIndex[i] = 0;
+          }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
@@ -714,7 +752,6 @@ void start_raft_server(int id) {
 
 void raft_rpc_init() {
   for(int i = 0; i < NODE_NUM; i++) {
-    std::cout << "Try to ping node: " << i << std::endl;
     if(i == myID) {
       continue;
     }
@@ -726,8 +763,8 @@ void raft_rpc_init() {
       rpcServer[i] = std::make_shared<raft_rpcConcurrentClient>(protocol, syncInfo[i]);
       transport->open();
       rpcServer[i]->ping(myID);
-    } catch(apache::thrift::transport::TTransportException &e) {
-
+    } catch(apache::thrift::transport::TTransportException) {
+      continue;
     }
   }
   return;
