@@ -1,6 +1,6 @@
-# Project 4:  Block Storage distributed system with Raft
+# Project:  Block Storage distributed system with Raft
 
-Authors: Shichun Yu (*syu274 AT wisc.edu*), Zhikang Hao, Yuting Yan
+**Authors:** Shichun Yu (*syu274 AT wisc.edu*), Zhikang Hao and Yuting Yan
 
 ## Overview
 
@@ -111,11 +111,11 @@ We also create a hash map to record the largest `seqNum` for each client. If the
 
 We implement a simple optimization to improve the reply latency when handling a large amount of requests. 
 
-<img src="https://lh3.googleusercontent.com/YH8rCi_SMz8yrIUln_OUM-kMShtnbY2jm8WKl-NPhG9vbmJt8EP-tRvirrNxliRlJqJO2G9GosLMRm1BwChn8Ayx1cdnQ6_KSJfaztHt3C-kt8bsaSuCa81qjnuZLaZb_NSXod3Tx0aPNo9w2A" alt="img" style="zoom: 50%;" />
+<img src="https://lh3.googleusercontent.com/YH8rCi_SMz8yrIUln_OUM-kMShtnbY2jm8WKl-NPhG9vbmJt8EP-tRvirrNxliRlJqJO2G9GosLMRm1BwChn8Ayx1cdnQ6_KSJfaztHt3C-kt8bsaSuCa81qjnuZLaZb_NSXod3Tx0aPNo9w2A" alt="img" style="zoom: 40%;" />
 
 In the original version, when having a large amount of requests, the leader has to execute (apply to the state machine) the earilier request, and then execute and reply to the later request, which causes high latency.	However, in the 4K block store, the latency of a later request could be improved a lot if there is no overlap between the request and the earlier ones. “No overlap” means the diffrences of this request address and all eailier write requests’ address are larger than 4K. 
 
-<img src="https://lh6.googleusercontent.com/ag17V2ZQAUd5MoapuyRAh4Hh_Bvkom2rxeI0Fo8tyT7dR8wUAf35uqqMvC23iMN2RzcCZDoiQ6aHgR9tgXLNpHPeVJiTDOcNcySK-_80j7hUPfQRC9_ExIHTsoMFvuqwofRq-dtDNbLbhcv_dw" alt="img" style="zoom: 50%;" />
+<img src="https://lh6.googleusercontent.com/ag17V2ZQAUd5MoapuyRAh4Hh_Bvkom2rxeI0Fo8tyT7dR8wUAf35uqqMvC23iMN2RzcCZDoiQ6aHgR9tgXLNpHPeVJiTDOcNcySK-_80j7hUPfQRC9_ExIHTsoMFvuqwofRq-dtDNbLbhcv_dw" alt="img" style="zoom: 40%;" />
 
 In this “non-overlap” case, the execution results of eailier requests have no impact on the later request. Therefore, there is no need to wait for the eailier requests, the leader could execute this request and reply immediately, and insert the index of this request log to a set. “lastApplied” variable could be updated according to this set to know which logs have been executed.  However, as time is limited, the implementation is not fully tested. 
 
