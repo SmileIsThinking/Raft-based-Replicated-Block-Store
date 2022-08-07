@@ -43,9 +43,7 @@ std::uniform_int_distribution<> dist(0, ELECTION_TIMEOUT);
 pthread_rwlock_t applylock;
 std::string my_addr;
 
-// std::atomic<bool> pending_backup;
 std::atomic<bool> is_primary;
-// std::atomic<bool> is_leader;
 int64_t last_heartbeat;
 // assuming single backup
 std::atomic<int> num_write_requests;
@@ -96,7 +94,6 @@ std::atomic<int> currentTerm{0};   // init to 0
 std::atomic<int> votedFor{-1};  // init to -1
 // std::atomic<int> entryNum{0};  
 std::vector<entry> raftLog = {};  // log index starts from 0!!!
-// TODO: log vector lock?
 
 
 /* Volatile State on all servers */

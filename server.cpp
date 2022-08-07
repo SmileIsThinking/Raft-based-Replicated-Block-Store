@@ -53,13 +53,8 @@ void blob_rpcHandler::compareBlock(const int64_t addr) {
 /* Raft Implementation  */
 /* ===================================== */
 
-
-// TODO: seq num
 void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
   // not a leader
-  // TODO: what if currently there is no leader
-  // std::cout << ""
-  // TODO: hangout
   if (leaderID.load() == -1) {
     std::cerr << "No leader" << std::endl;
     _return.rc = Errno::NO_LEADER;
@@ -80,9 +75,6 @@ void blob_rpcHandler::read(request_ret& _return, const int64_t addr) {
 
   new_request(_return, raftEntry);
   return;
-
-  // _return.rc = Errno::UNEXPECTED;
-  // return;
 }
 
 void new_request(request_ret& _return, entry e) {
@@ -159,12 +151,10 @@ void appendTimeout() {
   
   std::cout << "role: " << role.load() << std::endl;
   while(1) {
-    // std::cout << "append timeouting" << std::endl;
     if(role.load() != 2) {
       break;
     }
     int64_t curr = getMillisec();
-    // std::cout << "curr time: " << curr << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
       std::cout << "election timeout: " << REAL_TIMEOUT << " last election: " << last_election << std::endl;
       break;
@@ -176,8 +166,6 @@ void appendTimeout() {
 
 void toFollower(int term) {
   std:: cout << "TO FOLLOWER !!!" << std::endl;
-  // time(&last_election);
-  // std::cout << "last append: " << last_election << std::endl;
   pthread_rwlock_wrlock(&rolelock);
 
   role.store(2);
@@ -264,7 +252,6 @@ void raft_rpcHandler::request_vote(request_vote_reply& ret, const request_vote_a
             ret.voteGranted = true;
             last_election = getMillisec();
             votedFor.store(requestVote.candidateId); // memory ops, should be fine for performance
-            //currentTerm.store(requestVote.term);
             toFollower(requestVote.term);
             return;
         }else if(requestVote.term == currentTerm.load() && (votedFor.load() == -1 || votedFor.load() == requestVote.candidateId)){
@@ -353,16 +340,12 @@ void send_request_votes() {
 
 
   while(1) {
-    // std::cout << "My role: " << role.load() << std::endl;
     if(role.load() == 2) {
       std::cout << "From Candidate To Follower, maybe received AppendEntry" << std::endl;
       return;
     }
     int count = 0;
     int64_t curr = getMillisec();
-    // std::cout << "Right now the time: " << curr << std::endl;
-    // std::cout << "Last election: " << last_election << std::endl;
-    // std::cout << "TIMEOUT: " << REAL_TIMEOUT << std::endl;
     if(curr - last_election > REAL_TIMEOUT) {
       break;
     }
@@ -387,8 +370,6 @@ void send_request_votes() {
 
   last_election = getMillisec();
   toCandidate();
-  
-  // send_request_votes();
   
   return;
 }
@@ -454,9 +435,7 @@ void raft_rpcHandler::append_entries(append_entries_reply& ret, const append_ent
     }
 
   }
-  // if(entryNum > 0){
-  //     printf("append_entries: term: %d | leaderid: %d\n",appendEntries.term, votedFor.load());
-  // }
+
   if(appendEntries.term < currentTerm.load() || check_prev_entries(appendEntries.prevLogTerm, appendEntries.prevLogIndex)){
       std::cout << "do ret success = 3, app term + entry: " << appendEntries.term  << " " << appendEntries.prevLogIndex << std::endl;
       ret.term = currentTerm.load();
@@ -562,15 +541,11 @@ void send_appending_requests(){
       }
       
       if(lastIndex >= nextIndex[i]) {
-        // potential error
-        // std::cout << "stuck here" << std::endl;
         std::cout << "i: " << i << std::endl;
-        // std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
         appendEntry[i].entries = std::vector<entry>(raftLog.begin() + nextIndex[i], raftLog.end());
         std::cout << "append entry size " << appendEntry[i].entries.size();
         std::cout << "lastIndex " << lastIndex << std::endl;
         std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
-        // std::cout << "stuck there" << std::endl;
       }
       appendEntry[i].prevLogIndex = nextIndex[i] - 1;
 
@@ -596,8 +571,6 @@ void send_appending_requests(){
       int ack_num = 0;
 
       for(int i = 0; i < NODE_NUM; i++) {
-        // std::cout << "nextIndex[1]" << nextIndex[1] << std::endl;
-        // std::cout << "nextIndex[2]" << nextIndex[2] << std::endl;
         if(ack_flag[i] == 1) {
           ack_num++;
           continue;
@@ -611,10 +584,7 @@ void send_appending_requests(){
           ack_flag[i] = 1;
           ack_num++;
 
-          std::cout << "i: " << std::endl;
-          std::cout << "nextIndex update!" << std::endl;
           nextIndex[i] = lastIndex + 1;
-          std::cout << "nextIndex[i] " << nextIndex[i] << std::endl;
           matchIndex[i] = nextIndex[i] - 1;      
         }else if(ret[i].success == 3) {
           if(currentTerm.load() < ret[i].term) {
@@ -623,15 +593,8 @@ void send_appending_requests(){
           }
           ack_flag[i] = 1;
           ack_num++;
-          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
           std::cout << "nextIndex decrease" << std::endl;
           nextIndex[i] = nextIndex[i] - 1;
-          // std::cout << "i " << i << std::endl;
-          // std::cout << "nextIndex[i]" << nextIndex[i] << std::endl;
-          // ugly fix. but works
-          // if(nextIndex[i] < 0) {
-          //   nextIndex[i] = 0;
-          // }
         }else if(ret[i].success == -2) {
           ack_flag[i] = 1;
           ack_num++;
@@ -641,7 +604,7 @@ void send_appending_requests(){
         break;
       }
     }
-    // std::cout << "Ready to Commit!" << std::endl;
+
     int N = commitIndex.load();
     while(1) {
       N++;

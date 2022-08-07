@@ -110,7 +110,6 @@ void shell(){
             std::cout<<"Error: " <<tx.what() <<std::endl;
         }
     }
-//    delete afesq;
 }
 
 int main(int argc, char** argv) {
@@ -123,13 +122,7 @@ int main(int argc, char** argv) {
     }
     std::string s;
     stringGenerator(s, 4096);
-    // std::cout<<"client start" <<std::endl;
-    // padding(s, 4096);
-    // std::cout<<"size of the string: "<<s.size()<<std::endl;
     write(0, s);
-    // std::string read_val;
-    // read(0, read_val);
-    // std::cout<<"str read: "<<read_val.substr(0, 10) << std::endl;
-    // shell();
+
     return 0;
 }

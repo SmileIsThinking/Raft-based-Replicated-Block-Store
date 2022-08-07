@@ -24,15 +24,3 @@ namespace ServerStore {
     int write_state(int currentTerm, int votedFor);
     int read_state(int* currentTerm, int* votedFor);
 }
-
-/*
-
-struct entry {
-    // 0: read, 1: write
-    1: i32 commmand,
-    2: i32 term,   
-    3: i64 address,
-    4: string content,
-}
-
-*/
