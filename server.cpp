@@ -93,15 +93,49 @@ void new_request(request_ret& _return, entry e) {
   std::string value;
   while(1) {
     if(commitIndex.load() >= reqIndex) {
-      if(lastApplied.load() == reqIndex - 1){
+      // check overlap
+      bool overlap = false;
+      int64_t thisAddr = e.address;
+      for(int i = lastApplied.load() + 1; i < reqIndex; i++) {
+        if(raftLog[i].command == 0) {
+          overlap = false;
+        }else {
+          overlap = ifOverlap(thisAddr, raftLog[i].address);
+          if(overlap == true){
+            break;
+          }
+        }
+      }
+      if(overlap == false) {
         if(e.command == 0) {
           ServerStore::read(e.address, _return.value);
         }else if(e.command == 1) {
           ServerStore::write(e.address, e.content);
         }
         _return.rc = Errno::SUCCESS;
-        lastApplied.fetch_add(1);
-        return;        
+        appliedIndex.insert(reqIndex);
+        return;
+
+      }else{
+        if(lastApplied.load() == reqIndex - 1){
+          if(e.command == 0) {
+            ServerStore::read(e.address, _return.value);
+          }else if(e.command == 1) {
+            ServerStore::write(e.address, e.content);
+          }
+          _return.rc = Errno::SUCCESS;
+          appliedIndex.insert(reqIndex);
+          pthread_rwlock_wrlock(&applylock);
+          while(1) {
+            if(appliedIndex.count(lastApplied.load() + 1) > 0) {
+              lastApplied.fetch_add(1);
+            }else {
+              break;
+            }
+          }
+          pthread_rwlock_unlock(&applylock);
+          return;        
+        }
       }
     }
   }
@@ -775,4 +809,15 @@ bool  compare_log_vector(const std::vector<entry>& log1, std::vector<entry>& log
     } 
   }
   return true;
+}
+
+bool ifOverlap(int64_t addr1, int64_t addr2) {
+  int64_t diff = addr1 - addr2;
+  if(diff < BLOCK_SIZE && diff > -1 * BLOCK_SIZE) {
+    // is overlap
+    return true;
+  }else {
+    // non-overlap
+    return false;
+  }
 }
